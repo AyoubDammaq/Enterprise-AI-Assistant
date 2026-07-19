@@ -1,0 +1,6 @@
+@EnterpriseAIAssistant_HostAddress = http://localhost:5035
+
+GET {{EnterpriseAIAssistant_HostAddress}}/
+Accept: application/json
+
+###

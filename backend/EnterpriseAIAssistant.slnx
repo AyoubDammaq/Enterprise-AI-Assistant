@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EnterpriseAIAssistant.API/EnterpriseAIAssistant.API.csproj" />
+    <Project Path="src/EnterpriseAIAssistant.Application/EnterpriseAIAssistant.Application.csproj" />
+    <Project Path="src/EnterpriseAIAssistant.Domain/EnterpriseAIAssistant.Domain.csproj" />
+    <Project Path="src/EnterpriseAIAssistant.Infrastructure/EnterpriseAIAssistant.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EnterpriseAIAssistant.API.Tests/EnterpriseAIAssistant.API.Tests.csproj" />
+    <Project Path="tests/EnterpriseAIAssistant.Application.Tests/EnterpriseAIAssistant.Application.Tests.csproj" />
+    <Project Path="tests/EnterpriseAIAssistant.Domain.Tests/EnterpriseAIAssistant.Domain.Tests.csproj" />
+    <Project Path="tests/EnterpriseAIAssistant.Infrastructure.Tests/EnterpriseAIAssistant.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

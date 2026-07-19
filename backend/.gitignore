@@ -1,0 +1,53 @@
+## Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+msiproduct.log
+
+## Publish output
+publish/
+store/
+
+## Tools and Packages
+.nuget/
+*.nupkg
+# NuGet Packages Project system cache
+project.lock.json
+project.fragment.lock.json
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## Visual Studio cache and settings
+.vs/
+Minidump.mdmp
+
+## Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+## JetBrains Rider
+.idea/
+*.sln.iml
+
+## OS generated files
+.DS_Store
+Thumbs.db
+
+## Local App Settings (Secrets)
+appsettings.Development.json
+appsettings.local.json
