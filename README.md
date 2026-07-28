@@ -1,5 +1,4 @@
 # Enterprise AI Assistant
-[![Ask DeepWiki](https://devin.ai/assets/askdeepwiki.png)](https://deepwiki.com/AyoubDammaq/Enterprise-AI-Assistant.git)
 
 This repository contains the backend service for the Enterprise AI Assistant. It is built using .NET, following Clean Architecture principles to ensure a modular, scalable, and maintainable codebase.
 
