@@ -1,0 +1,13 @@
+﻿using Microsoft.Extensions.DependencyInjection;
+
+namespace EnterpriseAIAssistant.Infrastructure.Extensions
+{
+    public static class DependencieInjection
+    {
+        public static IServiceCollection AddApplication(this IServiceCollection services)
+        {
+            // Register your services here
+            return services;
+        }
+    }
+}

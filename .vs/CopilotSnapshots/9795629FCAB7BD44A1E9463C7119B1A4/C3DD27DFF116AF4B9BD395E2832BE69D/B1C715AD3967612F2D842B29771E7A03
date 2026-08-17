@@ -1,0 +1,46 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
+
+namespace EnterpriseAIAssistant.API.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class ChatController : ControllerBase
+    {
+        private readonly IChatCompletionService _chatCompletionService;
+
+        public ChatController(Kernel kernel)
+        {
+            _chatCompletionService =
+                kernel.GetRequiredService<IChatCompletionService>();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Chat(
+            [FromBody] ChatRequest request,
+            CancellationToken cancellationToken)
+        {
+            var history = new ChatHistory();
+
+            history.AddSystemMessage(
+                "You are a helpful AI assistant for an enterprise application.");
+
+            history.AddUserMessage(request.Message);
+
+            var response =
+                await _chatCompletionService.GetChatMessageContentAsync(
+                    history,
+                    cancellationToken: cancellationToken);
+
+            return Ok(new ChatResponse
+            {
+                Message = response.Content ?? string.Empty
+            });
+        }
+    }
+
+    public record ChatRequest(string Message);
+
+    public record ChatResponse(string Message);
+}

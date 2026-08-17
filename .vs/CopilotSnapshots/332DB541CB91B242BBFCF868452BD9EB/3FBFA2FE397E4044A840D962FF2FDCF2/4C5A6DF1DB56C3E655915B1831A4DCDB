@@ -1,6 +1,5 @@
-using EnterpriseAIAssistant.API.HealthChecks;
-using EnterpriseAIAssistant.API.Extensions;
-using EnterpriseAIAssistant.Application.Extensions;
+﻿using EnterpriseAIAssistant.API.HealthChecks;
+using EnterpriseAIAssistant.Application.Interfaces;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.SemanticKernel;
