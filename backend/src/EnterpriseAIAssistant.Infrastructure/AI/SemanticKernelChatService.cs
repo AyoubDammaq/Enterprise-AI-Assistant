@@ -9,8 +9,8 @@ namespace EnterpriseAIAssistant.Infrastructure.AI
         private readonly IChatCompletionService _chatCompletionService =
                 kernel.GetRequiredService<IChatCompletionService>();
 
-        public async Task<string> GetResponseAsync(
-            string message,
+        public async Task<string> GenerateResponseAsync(
+            string prompt,
             CancellationToken cancellationToken = default)
         {
             var chatHistory = new ChatHistory();
@@ -27,7 +27,7 @@ namespace EnterpriseAIAssistant.Infrastructure.AI
             - If you do not know something, clearly say so.
             """);
 
-            chatHistory.AddUserMessage(message);
+            chatHistory.AddUserMessage(prompt);
 
             var response =
                 await _chatCompletionService.GetChatMessageContentAsync(

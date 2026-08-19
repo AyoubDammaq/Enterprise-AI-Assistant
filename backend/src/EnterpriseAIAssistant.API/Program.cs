@@ -11,28 +11,38 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-var modelId = builder.Configuration["Gemini:ModelId"];
-var apiKey = builder.Configuration["Gemini:ApiKey"];
-
-if (string.IsNullOrWhiteSpace(modelId))
-{
-    throw new InvalidOperationException(
+// Add Gemini configuration 
+var modelId = builder.Configuration["Gemini:ModelId"] 
+    ?? throw new InvalidOperationException(
         "Gemini:ModelId is not configured.");
-}
 
-if (string.IsNullOrWhiteSpace(apiKey))
-{
-    throw new InvalidOperationException(
+var apiKey = builder.Configuration["Gemini:ApiKey"] 
+    ?? throw new InvalidOperationException(
         "Gemini:ApiKey is not configured.");
-}
+
+// Add Ollama configuration
+var ollamaEndpoint =
+    builder.Configuration["Ollama:Endpoint"]
+    ?? throw new InvalidOperationException(
+        "Ollama endpoint is not configured.");
+
+var ollamaModel =
+    builder.Configuration["Ollama:Model"]
+    ?? throw new InvalidOperationException(
+        "Ollama model is not configured.");
 
 builder.Services.AddSingleton<Kernel>(sp =>
 {
     var kernelBuilder = Kernel.CreateBuilder();
 
-    kernelBuilder.AddGoogleAIGeminiChatCompletion(
-        modelId: modelId,
-        apiKey: apiKey);
+    //kernelBuilder.AddGoogleAIGeminiChatCompletion(
+    //    modelId: modelId,
+    //    apiKey: apiKey);
+
+    kernelBuilder.AddOllamaChatCompletion(
+        modelId: ollamaModel,
+        endpoint: new Uri(ollamaEndpoint),
+        serviceId: "ollama");
 
     return kernelBuilder.Build();
 });
