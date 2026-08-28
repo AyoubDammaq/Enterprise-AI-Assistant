@@ -1,6 +1,7 @@
-using EnterpriseAIAssistant.API.HealthChecks;
 using EnterpriseAIAssistant.API.Extensions;
+using EnterpriseAIAssistant.API.HealthChecks;
 using EnterpriseAIAssistant.Application.Extensions;
+using EnterpriseAIAssistant.Infrastructure.AI.Plugins;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.SemanticKernel;
@@ -44,6 +45,8 @@ builder.Services.AddSingleton<Kernel>(sp =>
         endpoint: new Uri(ollamaEndpoint),
         serviceId: "ollama");
 
+    kernelBuilder.Plugins.AddFromType<DateTimePlugin>("DateTimePlugin");
+
     return kernelBuilder.Build();
 });
 
@@ -57,22 +60,22 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHealthChecks();
 
 //Congiguring Health Ckeck
-builder.Services.ConfigureHealthChecks(builder.Configuration);
+//builder.Services.ConfigureHealthChecks(builder.Configuration);
 
 var app = builder.Build();
 
 //HealthCheck Middleware
-app.MapHealthChecks("/api/health", new HealthCheckOptions()
-{
-    Predicate = _ => true,
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-});
-app.UseHealthChecksUI(options =>
-{
-    options.UIPath = "/healthcheck-ui";
-    //options.AddCustomStylesheet("./HealthCheck/Custom.css");
+//app.MapHealthChecks("/api/health", new HealthCheckOptions()
+//{
+//    Predicate = _ => true,
+//    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+//});
+//app.UseHealthChecksUI(options =>
+//{
+//    options.UIPath = "/healthcheck-ui";
+//    //options.AddCustomStylesheet("./HealthCheck/Custom.css");
 
-});
+//});
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
