@@ -47,7 +47,20 @@ builder.Services.AddSingleton<Kernel>(sp =>
 
     kernelBuilder.Plugins.AddFromType<DateTimePlugin>("DateTimePlugin");
 
-    return kernelBuilder.Build();
+    var kernel = kernelBuilder.Build();
+
+    foreach (var plugin in kernel.Plugins)
+    {
+        Console.WriteLine($"PLUGIN: {plugin.Name}");
+
+        foreach (var function in plugin)
+        {
+            Console.WriteLine(
+                $"  FUNCTION: {function.Name}");
+        }
+    }
+
+    return kernel;
 });
 
 builder.Services.AddServices(builder.Configuration); // Register application services
@@ -60,22 +73,22 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHealthChecks();
 
 //Congiguring Health Ckeck
-//builder.Services.ConfigureHealthChecks(builder.Configuration);
+builder.Services.ConfigureHealthChecks(builder.Configuration);
 
 var app = builder.Build();
 
 //HealthCheck Middleware
-//app.MapHealthChecks("/api/health", new HealthCheckOptions()
-//{
-//    Predicate = _ => true,
-//    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-//});
-//app.UseHealthChecksUI(options =>
-//{
-//    options.UIPath = "/healthcheck-ui";
-//    //options.AddCustomStylesheet("./HealthCheck/Custom.css");
+app.MapHealthChecks("/api/health", new HealthCheckOptions()
+{
+    Predicate = _ => true,
+    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+});
+app.UseHealthChecksUI(options =>
+{
+    options.UIPath = "/healthcheck-ui";
+    //options.AddCustomStylesheet("./HealthCheck/Custom.css");
 
-//});
+});
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
