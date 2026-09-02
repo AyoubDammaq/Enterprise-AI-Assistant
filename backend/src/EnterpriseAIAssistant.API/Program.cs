@@ -64,7 +64,6 @@ builder.Services.AddSingleton<Kernel>(sp =>
 });
 
 builder.Services.AddServices(builder.Configuration); // Register application services
-builder.Services.AddApplication(builder.Configuration); // Register application services
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddControllers();

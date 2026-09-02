@@ -6,9 +6,9 @@ namespace EnterpriseAIAssistant.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ChatController(IAIChatService iaChatService) : ControllerBase
+    public class ChatController(IAIChatService aiChatService) : ControllerBase
     {
-        private readonly IAIChatService _aiChatService = iaChatService;
+        private readonly IAIChatService _aiChatService = aiChatService;
 
         [HttpPost]
         public async Task<IActionResult> Chat(
