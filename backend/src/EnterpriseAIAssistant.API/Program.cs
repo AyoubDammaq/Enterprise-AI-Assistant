@@ -46,6 +46,7 @@ builder.Services.AddSingleton<Kernel>(sp =>
         serviceId: "ollama");
 
     kernelBuilder.Plugins.AddFromType<DateTimePlugin>("DateTimePlugin");
+    kernelBuilder.Plugins.AddFromType<CalculatorPlugin>("CalculatorPlugin");
 
     var kernel = kernelBuilder.Build();
 
@@ -72,7 +73,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHealthChecks();
 
 //Congiguring Health Ckeck
-builder.Services.ConfigureHealthChecks(builder.Configuration);
+//builder.Services.ConfigureHealthChecks(builder.Configuration);
 
 var app = builder.Build();
 
