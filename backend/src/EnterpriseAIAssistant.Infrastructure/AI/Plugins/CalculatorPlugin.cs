@@ -29,7 +29,25 @@ namespace EnterpriseAIAssistant.Infrastructure.AI.Plugins
             Console.WriteLine(">>> Calculate() WAS INVOKED <<<");
             Console.WriteLine("======================================");
 
-            var result = operation.ToLowerInvariant() switch
+            // Input validations
+            if (double.IsNaN(left) || double.IsInfinity(left))
+            {
+                throw new ArgumentOutOfRangeException(nameof(left), "The left operand must be a finite number.");
+            }
+
+            if (double.IsNaN(right) || double.IsInfinity(right))
+            {
+                throw new ArgumentOutOfRangeException(nameof(right), "The right operand must be a finite number.");
+            }
+
+            if (string.IsNullOrWhiteSpace(operation))
+            {
+                throw new ArgumentException("The operation must be provided and cannot be empty.", nameof(operation));
+            }
+
+            var op = operation.Trim().ToLowerInvariant();
+
+            var result = op switch
             {
                 "add" => left + right,
 
@@ -42,13 +60,18 @@ namespace EnterpriseAIAssistant.Infrastructure.AI.Plugins
                     : throw new DivideByZeroException(
                         "Cannot divide by zero."),
 
+                // Accept a few common synonyms/symbols
+                "+" => left + right,
+                "-" => left - right,
+                "*" => left * right,
+                "/" => right != 0 ? left / right : throw new DivideByZeroException("Cannot divide by zero."),
+
                 _ => throw new ArgumentException(
                     $"Unsupported operation: {operation}",
                     nameof(operation))
             };
 
-            Console.WriteLine(
-                $">>> CALCULATION: {left} {operation} {right} = {result}");
+            Console.WriteLine($">>> CALCULATION: {left} {op} {right} = {result}");
 
             return result;
         }

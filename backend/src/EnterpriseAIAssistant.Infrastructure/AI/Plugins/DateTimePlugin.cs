@@ -13,11 +13,23 @@ namespace EnterpriseAIAssistant.Infrastructure.AI.Plugins
             Console.WriteLine(">>> GetDateTime() WAS INVOKED <<<");
             Console.WriteLine("======================================");
 
-            var result = DateTime.Now.ToString("yyyy-MM-dd - HH:mm:ss");
+            var result = FormatDateTime(DateTime.Now);
 
             Console.WriteLine($">>> FUNCTION RESULT: {result}");
 
             return result;
+        }
+
+        // Internal helper to allow deterministic unit testing
+        internal static string FormatDateTime(DateTime now)
+        {
+            // Validation: ensure system clock is within a reasonable range
+            if (now.Year < 1900 || now.Year > 3000)
+            {
+                throw new InvalidOperationException("System date/time is outside the supported range.");
+            }
+
+            return now.ToString("yyyy-MM-dd HH:mm:ss");
         }
     }
 }
