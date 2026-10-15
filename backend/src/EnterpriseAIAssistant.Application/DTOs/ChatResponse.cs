@@ -1,11 +1,8 @@
 ﻿namespace EnterpriseAIAssistant.Application.DTOs
 {
-    public class ChatResponse
+    public class ChatResponse(string response, string? conversationId = null)
     {
-        public string Response { get; set; } = string.Empty;
-        public ChatResponse(string response)
-        {
-            Response = response;
-        }
+        public string Response { get; set; } = response;
+        public string? ConversationId { get; set; } = conversationId;
     }
 }

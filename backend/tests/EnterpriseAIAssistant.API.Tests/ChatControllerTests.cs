@@ -4,7 +4,7 @@ using EnterpriseAIAssistant.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 
-namespace API.Tests
+namespace EnterpriseAIAssistant.API.Tests
 {
     public class ChatControllerTests
     {
@@ -25,7 +25,7 @@ namespace API.Tests
             const string aiResponse = "AI stands for Artificial Intelligence.";
 
             _mockChatService
-                .Setup(s => s.GenerateResponseAsync(userMessage, It.IsAny<CancellationToken>()))
+                .Setup(s => s.GenerateResponseAsync(userMessage, It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(aiResponse);
 
             var request = new ChatRequest { Message = userMessage };
@@ -62,7 +62,7 @@ namespace API.Tests
             // Arrange
             const string userMessage = "Hello AI";
             _mockChatService
-                .Setup(s => s.GenerateResponseAsync(userMessage, It.IsAny<CancellationToken>()))
+                .Setup(s => s.GenerateResponseAsync(userMessage, It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync("Hello!");
 
             var request = new ChatRequest { Message = userMessage };
@@ -72,7 +72,7 @@ namespace API.Tests
 
             // Assert
             _mockChatService.Verify(
-                s => s.GenerateResponseAsync(userMessage, It.IsAny<CancellationToken>()),
+                s => s.GenerateResponseAsync(userMessage, It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()),
                 Times.Once);
         }
 
@@ -81,7 +81,7 @@ namespace API.Tests
         {
             // Arrange
             _mockChatService
-                .Setup(s => s.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Setup(s => s.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("AI service unavailable."));
 
             var request = new ChatRequest { Message = "Hello" };
@@ -97,7 +97,7 @@ namespace API.Tests
             // Arrange
             const string expected = "Enterprise AI answer.";
             _mockChatService
-                .Setup(s => s.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Setup(s => s.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(expected);
 
             var request = new ChatRequest { Message = "Tell me something." };

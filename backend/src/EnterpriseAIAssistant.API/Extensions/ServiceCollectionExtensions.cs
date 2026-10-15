@@ -1,5 +1,6 @@
 using EnterpriseAIAssistant.Application.Extensions;
 using EnterpriseAIAssistant.Infrastructure.Extensions;
+
 namespace EnterpriseAIAssistant.API.Extensions
 {
     public static class ServiceCollectionExtensions

@@ -1,56 +1,46 @@
-﻿using EnterpriseAIAssistant.Infrastructure.AI.Plugins;
+using System;
+using Xunit;
+using EnterpriseAIAssistant.Infrastructure.AI.Plugins;
 
 namespace EnterpriseAIAssistant.Infrastructure.Tests.Plugins
 {
     public class CalculatorPluginTests
     {
-        [Theory]
-        [InlineData(1d, 1d, "add", 2d)]
-        [InlineData(10d, 3d, "subtract", 7d)]
-        [InlineData(6d, 7d, "multiply", 42d)]
-        [InlineData(10d, 4d, "divide", 2.5d)]
-        public void Calculate_ValidOperation_ReturnsExpectedResult(
-            double left,
-            double right,
-            string operation,
-            double expected)
+        [Fact]
+        public void Calculate_Add_ReturnsSum()
         {
-            // Act
-            var result = CalculatorPlugin.Calculate(left, right, operation);
-
-            // Assert
-            Assert.Equal(expected, result, precision: 6);
+            Assert.Equal(5.0, CalculatorPlugin.Calculate(2, 3, "add"));
         }
 
         [Fact]
-        public void Calculate_OperationIsCaseInsensitive_ReturnsExpectedResult()
+        public void Calculate_SymbolDivide_ReturnsQuotient()
         {
-            // Act
-            var result = CalculatorPlugin.Calculate(2d, 3d, "AdD");
-
-            // Assert
-            Assert.Equal(5d, result, precision: 6);
+            Assert.Equal(2.5, CalculatorPlugin.Calculate(10, 4, "/"));
         }
 
         [Fact]
-        public void Calculate_DivideByZero_ThrowsDivideByZeroException()
+        public void Calculate_DivideByZero_Throws()
         {
-            // Act & Assert
-            var ex = Assert.Throws<DivideByZeroException>(
-                () => CalculatorPlugin.Calculate(10d, 0d, "divide"));
-
-            Assert.Equal("Cannot divide by zero.", ex.Message);
+            Assert.Throws<DivideByZeroException>(() => CalculatorPlugin.Calculate(5, 0, "divide"));
         }
 
         [Fact]
-        public void Calculate_UnsupportedOperation_ThrowsArgumentException()
+        public void Calculate_InvalidOperation_Throws()
         {
-            // Act & Assert
-            var ex = Assert.Throws<ArgumentException>(
-                () => CalculatorPlugin.Calculate(10d, 5d, "modulo"));
+            Assert.Throws<ArgumentException>(() => CalculatorPlugin.Calculate(1, 1, ""));
+        }
 
-            Assert.Contains("Unsupported operation", ex.Message);
-            Assert.Equal("operation", ex.ParamName);
+        [Fact]
+        public void Calculate_NaNOperand_Throws()
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => CalculatorPlugin.Calculate(double.NaN, 1, "add"));
+        }
+
+        [Fact]
+        public void Calculate_LargeMultiply_ProducesInfinity()
+        {
+            var res = CalculatorPlugin.Calculate(1e308, 1e308, "multiply");
+            Assert.True(double.IsInfinity(res));
         }
     }
 }

@@ -2,6 +2,7 @@ using EnterpriseAIAssistant.API.Extensions;
 using EnterpriseAIAssistant.API.HealthChecks;
 using EnterpriseAIAssistant.Application.Extensions;
 using EnterpriseAIAssistant.Infrastructure.AI.Plugins;
+using EnterpriseAIAssistant.Infrastructure.Memory;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.SemanticKernel;
@@ -49,6 +50,10 @@ builder.Services.AddSingleton<Kernel>(sp =>
     kernelBuilder.Plugins.AddFromType<CalculatorPlugin>("CalculatorPlugin");
 
     var kernel = kernelBuilder.Build();
+
+    // Réutilise MemoryPlugin et IMemoryService enregistrés par DI.
+    var memoryPlugin = sp.GetRequiredService<MemoryPlugin>();
+    kernel.Plugins.AddFromObject(memoryPlugin, "MemoryPlugin");
 
     foreach (var plugin in kernel.Plugins)
     {

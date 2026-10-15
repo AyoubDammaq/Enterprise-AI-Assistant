@@ -20,11 +20,17 @@ namespace EnterpriseAIAssistant.API.Controllers
                 return BadRequest("Message cannot be empty.");
             }
 
+            var conversationId = string.IsNullOrWhiteSpace(request.ConversationId)
+                ? Guid.NewGuid().ToString()
+                : request.ConversationId;
+
             var response = await _aiChatService.GenerateResponseAsync(
                 request.Message,
+                conversationId,
+                request.UserId,
                 cancellationToken);
 
-            return Ok(new ChatResponse(response));
+            return Ok(new ChatResponse(response, conversationId));
         }
     }
 }

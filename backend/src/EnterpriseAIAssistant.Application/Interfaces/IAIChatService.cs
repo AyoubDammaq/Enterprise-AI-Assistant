@@ -2,6 +2,6 @@
 {
     public interface IAIChatService
     {
-        Task<string> GenerateResponseAsync(string prompt, CancellationToken cancellationToken = default);
+        Task<string> GenerateResponseAsync(string prompt, string conversationId, Guid? userId, CancellationToken cancellationToken = default);
     }
 }
