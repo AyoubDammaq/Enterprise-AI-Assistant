@@ -28,7 +28,11 @@ namespace EnterpriseAIAssistant.API.Tests
                 .Setup(s => s.GenerateResponseAsync(userMessage, It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(aiResponse);
 
-            var request = new ChatRequest { Message = userMessage };
+            var request = new ChatRequest
+            {
+                Message = userMessage,
+                UserId = Guid.NewGuid()
+            };
 
             // Act
             var result = await _controller.Chat(request, CancellationToken.None);
@@ -46,7 +50,11 @@ namespace EnterpriseAIAssistant.API.Tests
         public async Task Chat_WithEmptyOrWhitespaceMessage_ReturnsBadRequest(string? message)
         {
             // Arrange
-            var request = new ChatRequest { Message = message! };
+            var request = new ChatRequest
+            {
+                Message = message,
+                UserId = Guid.NewGuid()
+            };
 
             // Act
             var result = await _controller.Chat(request, CancellationToken.None);
@@ -65,7 +73,11 @@ namespace EnterpriseAIAssistant.API.Tests
                 .Setup(s => s.GenerateResponseAsync(userMessage, It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync("Hello!");
 
-            var request = new ChatRequest { Message = userMessage };
+            var request = new ChatRequest
+            {
+                Message = userMessage,
+                UserId = Guid.NewGuid()
+            };
 
             // Act
             await _controller.Chat(request, CancellationToken.None);
@@ -84,7 +96,11 @@ namespace EnterpriseAIAssistant.API.Tests
                 .Setup(s => s.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("AI service unavailable."));
 
-            var request = new ChatRequest { Message = "Hello" };
+            var request = new ChatRequest
+            {
+                Message = "Hello",
+                UserId = Guid.NewGuid()
+            };
 
             // Act & Assert
             await Assert.ThrowsAsync<InvalidOperationException>(
@@ -100,7 +116,11 @@ namespace EnterpriseAIAssistant.API.Tests
                 .Setup(s => s.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(expected);
 
-            var request = new ChatRequest { Message = "Tell me something." };
+            var request = new ChatRequest
+            {
+                Message = "Tell me something.",
+                UserId = Guid.NewGuid()
+            };
 
             // Act
             var result = await _controller.Chat(request, CancellationToken.None);
@@ -110,6 +130,34 @@ namespace EnterpriseAIAssistant.API.Tests
             var response = Assert.IsType<ChatResponse>(okResult.Value);
             Assert.False(string.IsNullOrWhiteSpace(response.Response));
             Assert.Equal(expected, response.Response);
+        }
+
+        [Fact]
+        public async Task Chat_WhenConversationBelongsToAnotherUser_ReturnsNotFound()
+        {
+            var userId = Guid.NewGuid();
+
+            _mockChatService
+                .Setup(s => s.GenerateResponseAsync(
+                    "Hello",
+                    "conv-1",
+                    userId,
+                    It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new UnauthorizedAccessException());
+
+            var request = new ChatRequest
+            {
+                Message = "Hello",
+                ConversationId = "conv-1",
+                UserId = userId
+            };
+
+            var result = await _controller.Chat(
+                request,
+                CancellationToken.None);
+
+            var notFound = Assert.IsType<NotFoundObjectResult>(result);
+            Assert.Equal("Conversation not found.", notFound.Value);
         }
     }
 }

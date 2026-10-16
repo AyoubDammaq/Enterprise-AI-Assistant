@@ -54,7 +54,7 @@ namespace EnterpriseAIAssistant.Infrastructure.AI
                 effectiveUserId,
                 prompt);
 
-            var chatHistory = _conversationStore.GetOrCreate(conversationId);
+            var chatHistory = _conversationStore.GetOrCreate(conversationId, userId.Value);
 
 
             if (!chatHistory.Any(m => m.Role == AuthorRole.System))
