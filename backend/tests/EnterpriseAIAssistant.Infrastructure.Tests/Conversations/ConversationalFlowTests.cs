@@ -71,7 +71,7 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Conversations
             Assert.DoesNotContain(callToB, m => m.Content == "My name is Ahmed.");
 
             // B ne possède qu'un seul message utilisateur : le sien.
-            Assert.Single(callToB.Where(m => m.Role == AuthorRole.User));
+            Assert.Single(callToB, m => m.Role == AuthorRole.User);
             Assert.Contains(callToB, m =>
                 m.Role == AuthorRole.User && m.Content == "What is my name?");
         }

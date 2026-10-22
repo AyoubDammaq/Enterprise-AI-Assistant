@@ -11,7 +11,7 @@ namespace EnterpriseAIAssistant.API.Extensions
             services.AddApplication(configuration);
 
             // Register infrastructure layer services
-            services.AddInfrastructure();
+            services.AddInfrastructure(configuration);
 
             return services;
         }

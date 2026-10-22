@@ -2,16 +2,87 @@ using EnterpriseAIAssistant.API.Extensions;
 using EnterpriseAIAssistant.API.HealthChecks;
 using EnterpriseAIAssistant.Application.Extensions;
 using EnterpriseAIAssistant.Infrastructure.AI.Plugins;
+using EnterpriseAIAssistant.Infrastructure.Identity;
 using EnterpriseAIAssistant.Infrastructure.Memory;
 using HealthChecks.UI.Client;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.SemanticKernel;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+var jwtSection = builder.Configuration.GetSection(JwtOptions.SectionName);
 
-builder.Services.AddControllers();
+var issuer = jwtSection["Issuer"];
+var audience = jwtSection["Audience"];
+var secret = jwtSection["SecretKey"];
+
+if (string.IsNullOrWhiteSpace(issuer) ||
+    string.IsNullOrWhiteSpace(audience) ||
+    string.IsNullOrWhiteSpace(secret))
+{
+    throw new InvalidOperationException(
+        "La configuration JWT est incomplète.");
+}
+
+byte[] keyBytes;
+
+try
+{
+    keyBytes = Convert.FromBase64String(secret);
+}
+catch (FormatException ex)
+{
+    throw new InvalidOperationException(
+        "Jwt:SecretKey doit être une clé Base64 valide.", ex);
+}
+
+if (keyBytes.Length < 32)
+{
+    throw new InvalidOperationException(
+        "Jwt:SecretKey doit contenir au moins 32 octets.");
+}
+
+builder.Services
+    .AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme =
+            JwtBearerDefaults.AuthenticationScheme;
+
+        options.DefaultChallengeScheme =
+            JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+
+        options.TokenValidationParameters =
+            new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = issuer,
+
+                ValidateAudience = true,
+                ValidAudience = audience,
+
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
+
+                ValidateLifetime = true,
+                RequireExpirationTime = true,
+                RequireSignedTokens = true,
+
+                ClockSkew = TimeSpan.FromSeconds(30),
+
+                NameClaimType = JwtRegisteredClaimNames.Sub,
+                RoleClaimType = "role"
+            };
+    });
+
+builder.Services.AddAuthorization();
+
 
 // Add Gemini configuration 
 var modelId = builder.Configuration["Gemini:ModelId"] 
@@ -103,6 +174,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseAuthentication();
 
 app.UseAuthorization();
 
