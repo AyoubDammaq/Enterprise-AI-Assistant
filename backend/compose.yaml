@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: enterprise-ai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: EnterpriseAIAssistantAuth
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - enterprise-ai-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d EnterpriseAIAssistantAuth"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: src/EnterpriseAIAssistant.API/Dockerfile
+    container_name: enterprise-ai-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__AuthDatabase: "Host=postgres;Port=5432;Database=EnterpriseAIAssistantAuth;Username=postgres;Password=${POSTGRES_PASSWORD}"
+      Jwt__SecretKey: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      Jwt__Issuer: EnterpriseAIAssistant
+      Jwt__Audience: EnterpriseAIAssistant.Client
+      Gemini__ApiKey: ${GEMINI_API_KEY:-}
+      Gemini__ModelId: gemini-2.5-flash
+      Ollama__Endpoint: http://host.docker.internal:11434
+      Ollama__Model: llama3.2
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  enterprise-ai-postgres-data:

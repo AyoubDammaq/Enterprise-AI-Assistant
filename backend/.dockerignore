@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/TestResults/
+.git/
+.env
+**/appsettings.Development.json
+**/appsettings.local.json
+*.dump
+*.backup
