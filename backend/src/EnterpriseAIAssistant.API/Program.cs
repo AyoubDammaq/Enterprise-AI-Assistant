@@ -1,10 +1,7 @@
 using EnterpriseAIAssistant.API.Extensions;
-using EnterpriseAIAssistant.API.HealthChecks;
-using EnterpriseAIAssistant.Application.Extensions;
 using EnterpriseAIAssistant.Infrastructure.AI.Plugins;
 using EnterpriseAIAssistant.Infrastructure.Identity;
 using EnterpriseAIAssistant.Infrastructure.Memory;
-using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
@@ -169,19 +166,6 @@ builder.Services.AddHealthChecks();
 //builder.Services.ConfigureHealthChecks(builder.Configuration);
 
 var app = builder.Build();
-
-//HealthCheck Middleware
-app.MapHealthChecks("/api/health", new HealthCheckOptions()
-{
-    Predicate = _ => true,
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-});
-app.UseHealthChecksUI(options =>
-{
-    options.UIPath = "/healthcheck-ui";
-    //options.AddCustomStylesheet("./HealthCheck/Custom.css");
-
-});
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
