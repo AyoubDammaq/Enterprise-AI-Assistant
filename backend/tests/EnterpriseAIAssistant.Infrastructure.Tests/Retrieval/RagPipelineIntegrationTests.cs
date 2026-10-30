@@ -86,11 +86,21 @@ public sealed class RagPipelineIntegrationTests
                 "How can I reset my forgotten password?",
                 topK: 2);
 
-            // Assert: the password document is ranked first.
-            Assert.Equal(2, results.Count);
-            Assert.Equal(
-                "password-reset.md",
-                results[0].Chunk.Source);
+            // Assert: only relevant documents should be retrieved.
+            Assert.NotEmpty(results);
+
+            Assert.Contains(
+                results,
+                result => result.Chunk.Source == "password-reset.md");
+
+            Assert.DoesNotContain(
+                results,
+                result => result.Chunk.Source == "dashboard.md");
+
+            Assert.All(results, result =>
+                Assert.True(
+                    result.SimilarityScore >=
+                    InMemoryVectorStore.MinimumSimilarityScore));
 
             Assert.True(
                 double.IsFinite(results[0].SimilarityScore));

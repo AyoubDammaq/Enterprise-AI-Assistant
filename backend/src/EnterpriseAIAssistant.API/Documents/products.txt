@@ -1,0 +1,12 @@
+﻿Product: Enterprise AI Assistant
+
+Description:
+An AI-powered assistant designed to answer questions
+using internal company documents.
+
+The application uses Retrieval-Augmented Generation
+to retrieve relevant information before generating
+answers with a local language model.
+
+The embedding model is nomic-embed-text.
+The chat model is llama3.2.

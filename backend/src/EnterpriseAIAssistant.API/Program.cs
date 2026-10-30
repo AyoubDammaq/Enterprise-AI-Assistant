@@ -1,9 +1,9 @@
 using EnterpriseAIAssistant.API.Extensions;
+using EnterpriseAIAssistant.API.HostedServices;
 using EnterpriseAIAssistant.Infrastructure.AI.Plugins;
 using EnterpriseAIAssistant.Infrastructure.Identity;
 using EnterpriseAIAssistant.Infrastructure.Memory;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Microsoft.SemanticKernel;
@@ -139,6 +139,7 @@ builder.Services.AddSingleton<Kernel>(sp =>
 });
 
 builder.Services.AddServices(builder.Configuration); // Register application services
+builder.Services.AddHostedService<DocumentIndexingHostedService>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddControllers();

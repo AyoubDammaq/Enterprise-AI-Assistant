@@ -9,9 +9,10 @@ namespace EnterpriseAIAssistant.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    public class ChatController(IAIChatService aiChatService) : ControllerBase
+    public class ChatController(IAIChatService aiChatService, IRagService ragService) : ControllerBase
     {
         private readonly IAIChatService _aiChatService = aiChatService;
+        private readonly IRagService _ragService = ragService;
 
         [HttpPost]
         public async Task<IActionResult> Chat(
@@ -49,6 +50,50 @@ namespace EnterpriseAIAssistant.API.Controllers
             catch (UnauthorizedAccessException)
             {
                 // Ne révèle pas si une conversation appartient à un autre utilisateur.
+                return NotFound("Conversation not found.");
+            }
+        }
+
+        [HttpPost("rag")]
+        public async Task<IActionResult> ChatWithRag(
+            [FromBody] RagRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(request.Question))
+            {
+                return BadRequest("Question cannot be empty.");
+            }
+
+            // L'identité provient du JWT validé.
+            var userIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+
+            if (!Guid.TryParse(userIdClaim, out var userId) ||
+                userId == Guid.Empty)
+            {
+                return Unauthorized();
+            }
+
+            var conversationId = string.IsNullOrWhiteSpace(request.ConversationId)
+                ? Guid.NewGuid().ToString()
+                : request.ConversationId;
+
+            try
+            {
+                var response = await _ragService.AskAsync(
+                    request.Question,
+                    conversationId,
+                    userId,
+                    cancellationToken);
+
+                return Ok(new
+                {
+                    response.Answer,
+                    response.Sources,
+                    ConversationId = conversationId
+                });
+            }
+            catch (UnauthorizedAccessException)
+            {
                 return NotFound("Conversation not found.");
             }
         }

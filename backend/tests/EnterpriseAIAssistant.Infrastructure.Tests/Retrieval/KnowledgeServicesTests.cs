@@ -9,24 +9,48 @@ public sealed class KnowledgeServicesTests
     [Fact]
     public async Task Indexer_EmbedsChunksAndStoresThem()
     {
-        var embeddings = new FakeEmbeddingService(text => text.Contains("password", StringComparison.OrdinalIgnoreCase)
-            ? new float[] { 1, 0 }
-            : new float[] { 0, 1 });
+        // Arrange
+        var embeddings = new FakeEmbeddingService(
+            text => text.Contains("password", StringComparison.OrdinalIgnoreCase)
+                ? new float[] { 1, 0 }
+                : new float[] { 0, 1 });
+
         var store = new InMemoryVectorStore();
         var indexer = new KnowledgeIndexer(embeddings, store);
+
         var chunks = new[]
         {
-            new DocumentChunk("password", "password.md", 0, "Password reset instructions"),
-            new DocumentChunk("colors", "colors.md", 0, "Product color guide")
-        };
+        new DocumentChunk(
+            "password", "password.md", 0,
+            "Password reset instructions"),
 
+        new DocumentChunk(
+            "colors", "colors.md", 0,
+            "Product color guide")
+    };
+
+        // Act
         var indexedCount = await indexer.IndexAsync(chunks);
-        var results = await store.SearchAsync(new float[] { 1, 0 }, topK: 2);
 
+        // Assert: indexing behavior
         Assert.Equal(2, indexedCount);
         Assert.Equal(2, embeddings.Calls);
-        Assert.Equal("password.md", results[0].Chunk.Source);
-        Assert.Equal("colors.md", results[1].Chunk.Source);
+
+        // Assert: both documents were stored.
+        // Search independently using each document's embedding.
+        var passwordResults = await store.SearchAsync(
+            new float[] { 1, 0 }, topK: 2);
+
+        var colorsResults = await store.SearchAsync(
+            new float[] { 0, 1 }, topK: 2);
+
+        Assert.Contains(
+            passwordResults,
+            result => result.Chunk.Source == "password.md");
+
+        Assert.Contains(
+            colorsResults,
+            result => result.Chunk.Source == "colors.md");
     }
 
     [Fact]

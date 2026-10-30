@@ -1,5 +1,4 @@
-﻿
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using EnterpriseAIAssistant.API.Controllers;
 using EnterpriseAIAssistant.Application.DTOs;
@@ -13,12 +12,14 @@ namespace EnterpriseAIAssistant.API.Tests
     public class ChatControllerTests
     {
         private readonly Mock<IAIChatService> _mockChatService;
+        private readonly Mock<IRagService> _mockRagService;
         private readonly ChatController _controller;
 
         public ChatControllerTests()
         {
             _mockChatService = new Mock<IAIChatService>();
-            _controller = new ChatController(_mockChatService.Object);
+            _mockRagService = new Mock<IRagService>();
+            _controller = new ChatController(_mockChatService.Object, _mockRagService.Object);
         }
 
         private void AuthenticateAs(Guid userId)

@@ -155,4 +155,122 @@ public sealed class InMemoryVectorStoreTests
         var chunk = new DocumentChunk(source, source, index, content);
         return new EmbeddedChunk(chunk, embedding);
     }
+
+    [Fact]
+    public async Task SearchAsync_ExcludesChunksBelowMinimumSimilarityScore()
+    {
+        // Arrange
+        var vectorStore = new InMemoryVectorStore();
+
+        var chunks = new[]
+        {
+        CreateEmbeddedChunk(
+            "doc-1", "relevant.md", 0,
+            [1f, 0f]),
+
+        CreateEmbeddedChunk(
+            "doc-2", "irrelevant.md", 0,
+            [0f, 1f])
+    };
+
+        await vectorStore.UpsertAsync(chunks);
+
+        var queryEmbedding = new float[] { 1f, 0f };
+
+        // Act
+        var results = await vectorStore.SearchAsync(
+            queryEmbedding,
+            topK: 5);
+
+        // Assert
+        Assert.Single(results);
+        Assert.Equal("relevant.md", results[0].Chunk.Source);
+        Assert.True(
+            results[0].SimilarityScore >=
+            InMemoryVectorStore.MinimumSimilarityScore);
+    }
+
+    [Fact]
+    public async Task SearchAsync_ReturnsChunksAboveMinimumSimilarityScore()
+    {
+        // Arrange
+        var vectorStore = new InMemoryVectorStore();
+
+        var chunks = new[]
+        {
+        CreateEmbeddedChunk(
+            "doc-1", "high-relevance.md", 0,
+            [1f, 0f]),
+
+        CreateEmbeddedChunk(
+            "doc-2", "medium-relevance.md", 0,
+            [0.8f, 0.6f])
+    };
+
+        await vectorStore.UpsertAsync(chunks);
+
+        var queryEmbedding = new float[] { 1f, 0f };
+
+        // Act
+        var results = await vectorStore.SearchAsync(
+            queryEmbedding,
+            topK: 5);
+
+        // Assert
+        Assert.Equal(2, results.Count);
+
+        Assert.All(results, result =>
+            Assert.True(
+                result.SimilarityScore >=
+                InMemoryVectorStore.MinimumSimilarityScore));
+
+        Assert.Equal(
+            "high-relevance.md",
+            results[0].Chunk.Source);
+    }
+
+    [Fact]
+    public async Task SearchAsync_ReturnsEmptyList_WhenAllChunksAreBelowMinimumSimilarityScore()
+    {
+        // Arrange
+        var vectorStore = new InMemoryVectorStore();
+
+        var chunks = new[]
+        {
+        CreateEmbeddedChunk(
+            "doc-1", "document-1.md", 0,
+            [0f, 1f]),
+
+        CreateEmbeddedChunk(
+            "doc-2", "document-2.md", 0,
+            [-1f, 0f])
+    };
+
+        await vectorStore.UpsertAsync(chunks);
+
+        var queryEmbedding = new float[] { 1f, 0f };
+
+        // Act
+        var results = await vectorStore.SearchAsync(
+            queryEmbedding,
+            topK: 5);
+
+        // Assert
+        Assert.Empty(results);
+    }
+
+    private static EmbeddedChunk CreateEmbeddedChunk(
+        string documentId,
+        string source,
+        int chunkIndex,
+        float[] embedding)
+    {
+        var chunk = new DocumentChunk(
+            documentId,
+            source,
+            chunkIndex,
+            $"Content of {source}");
+
+        return new EmbeddedChunk(chunk, embedding);
+    }
 }

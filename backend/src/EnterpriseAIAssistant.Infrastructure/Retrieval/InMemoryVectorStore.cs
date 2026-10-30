@@ -10,7 +10,7 @@ namespace EnterpriseAIAssistant.Infrastructure.Retrieval;
 public sealed class InMemoryVectorStore : IVectorStore
 {
     public const int MaximumTopK = 20;
-
+    public const double MinimumSimilarityScore = 0.50;
     private readonly object _gate = new();
     private readonly Dictionary<(string DocumentId, int ChunkIndex), EmbeddedChunk> _chunks = new();
     private int? _vectorDimensions;
@@ -108,10 +108,15 @@ public sealed class InMemoryVectorStore : IVectorStore
         {
             cancellationToken.ThrowIfCancellationRequested();
             var score = CosineSimilarity.Calculate(queryEmbedding, item.Embedding);
+            Console.WriteLine(
+                $"[RAG] Source={item.Chunk.Source}, " +
+                $"Chunk={item.Chunk.ChunkIndex}, " +
+                $"Similarity={score:F4}");
             ranked.Add(new RetrievedChunk(item.Chunk, score));
         }
 
         IReadOnlyList<RetrievedChunk> result = ranked
+            .Where(item => item.SimilarityScore >= MinimumSimilarityScore)
             .OrderByDescending(item => item.SimilarityScore)
             .ThenBy(item => item.Chunk.Source, StringComparer.Ordinal)
             .ThenBy(item => item.Chunk.ChunkIndex)
