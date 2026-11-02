@@ -1,6 +1,6 @@
 ﻿using Microsoft.SemanticKernel.ChatCompletion;
 
-namespace EnterpriseAIAssistant.Application.Interfaces
+namespace EnterpriseAIAssistant.Infrastructure.Memory
 {
     public interface IConversationStore
     {

@@ -1,5 +1,4 @@
-﻿
-using EnterpriseAIAssistant.Application.Interfaces;
+﻿using EnterpriseAIAssistant.Application.Interfaces;
 using EnterpriseAIAssistant.Infrastructure.Documents;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
 using Microsoft.Extensions.Options;
@@ -15,6 +14,12 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
             // Arrange: use the actual project document directory.
             var documentsPath =
                 Environment.GetEnvironmentVariable("RAG_DOCUMENTS_PATH");
+
+            if (string.IsNullOrWhiteSpace(documentsPath))
+            {
+                throw new InvalidOperationException(
+                    "Set the RAG_DOCUMENTS_PATH environment variable.");
+            }
 
             Assert.False(
                 string.IsNullOrWhiteSpace(documentsPath),

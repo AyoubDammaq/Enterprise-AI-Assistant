@@ -3,16 +3,10 @@ using EnterpriseAIAssistant.Application.Interfaces;
 
 namespace EnterpriseAIAssistant.Infrastructure.Retrieval;
 
-public sealed class KnowledgeRetriever : IKnowledgeRetriever
+public sealed class KnowledgeRetriever(IEmbeddingService embeddingService, IVectorStore vectorStore) : IKnowledgeRetriever
 {
-    private readonly IEmbeddingService _embeddingService;
-    private readonly IVectorStore _vectorStore;
-
-    public KnowledgeRetriever(IEmbeddingService embeddingService, IVectorStore vectorStore)
-    {
-        _embeddingService = embeddingService;
-        _vectorStore = vectorStore;
-    }
+    private readonly IEmbeddingService _embeddingService = embeddingService;
+    private readonly IVectorStore _vectorStore = vectorStore;
 
     public async Task<IReadOnlyList<RetrievedChunk>> SearchAsync(
         string query,
@@ -20,10 +14,11 @@ public sealed class KnowledgeRetriever : IKnowledgeRetriever
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
-        if (topK is < 1 or > InMemoryVectorStore.MaximumTopK)
+        if (topK < 1)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(topK), $"topK must be between 1 and {InMemoryVectorStore.MaximumTopK}.");
+                nameof(topK),
+                "topK must be greater than zero.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();

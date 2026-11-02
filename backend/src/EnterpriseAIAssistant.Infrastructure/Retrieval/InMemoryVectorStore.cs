@@ -84,6 +84,13 @@ public sealed class InMemoryVectorStore : IVectorStore
         ValidateVector(queryEmbedding, nameof(queryEmbedding));
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (topK is < 1 or > MaximumTopK)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(topK),
+                $"topK must be between 1 and {MaximumTopK}.");
+        }
+
         List<EmbeddedChunk> snapshot;
         lock (_gate)
         {
