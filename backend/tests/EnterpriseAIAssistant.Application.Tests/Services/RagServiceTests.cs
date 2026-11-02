@@ -111,5 +111,111 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
                     It.IsAny<CancellationToken>()),
                 Times.Once);
         }
+
+        [Fact]
+        public async Task AskAsync_RetrievalFailure_PropagatesAndDoesNotCallLlm()
+        {
+            var retriever = new Mock<IKnowledgeRetriever>();
+            var chat = new Mock<IAIChatService>();
+
+            retriever
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new HttpRequestException("Embedding failed."));
+
+            var service = new RagService(retriever.Object, chat.Object);
+
+            await Assert.ThrowsAsync<HttpRequestException>(() =>
+                service.AskAsync(
+                    "How do I reset my password?",
+                    "conversation-1",
+                    Guid.NewGuid()));
+
+            chat.Verify(
+                x => x.GenerateGroundedResponseAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<IReadOnlyList<RetrievedChunk>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<Guid?>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Never);
+        }
+
+        [Fact]
+        public async Task AskAsync_LlmFailure_PropagatesException()
+        {
+            var retriever = new Mock<IKnowledgeRetriever>();
+            var chat = new Mock<IAIChatService>();
+
+            var retrieved = new[]
+            {
+            new RetrievedChunk(
+                new DocumentChunk(
+                    "password-guide",
+                    "password.md",
+                    0,
+                    "Select Forgot password."),
+                0.95)
+        };
+
+            retriever
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(retrieved);
+
+            chat
+                .Setup(x => x.GenerateGroundedResponseAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<IReadOnlyList<RetrievedChunk>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<Guid?>(),
+                    It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("LLM unavailable."));
+
+            var service = new RagService(retriever.Object, chat.Object);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.AskAsync(
+                    "How do I reset my password?",
+                    "conversation-1",
+                    Guid.NewGuid()));
+        }
+
+        [Fact]
+        public async Task AskAsync_EmptyRetrieval_DoesNotCallLlm()
+        {
+            var retriever = new Mock<IKnowledgeRetriever>();
+            var chat = new Mock<IAIChatService>();
+
+            retriever
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Array.Empty<RetrievedChunk>());
+
+            var service = new RagService(retriever.Object, chat.Object);
+
+            var response = await service.AskAsync(
+                "Question not covered by the corpus",
+                "conversation-1",
+                Guid.NewGuid());
+
+            Assert.Empty(response.Sources);
+            Assert.Contains("couldn't find relevant information", response.Answer);
+
+            chat.Verify(
+                x => x.GenerateGroundedResponseAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<IReadOnlyList<RetrievedChunk>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<Guid?>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Never);
+        }
     }
 }
