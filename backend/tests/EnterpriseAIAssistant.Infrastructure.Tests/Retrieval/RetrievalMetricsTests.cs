@@ -1,20 +1,21 @@
-﻿namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval;
+﻿
+namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval;
 
 public sealed class RetrievalMetricsTests
 {
     private static readonly RetrievalEvaluationSample[] Samples =
     [
         new(
-            "company-info.md",
-            ["company-info.md", "products.txt"]),
+            "support-faq.md",
+            ["support-faq.md", "product-guide.md"]),
 
         new(
-            "products.txt",
-            ["company-info.md", "products.txt"]),
+            "product-guide.md",
+            ["troubleshooting.md", "product-guide.md"]),
 
         new(
-            "password-reset.md",
-            ["company-info.md", "products.txt"])
+            "troubleshooting.md",
+            ["support-faq.md", "product-guide.md"])
     ];
 
     [Fact]

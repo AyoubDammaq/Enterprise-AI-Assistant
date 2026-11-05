@@ -1,10 +1,12 @@
-﻿using EnterpriseAIAssistant.Application.DTOs;
+﻿
+using EnterpriseAIAssistant.Application.DTOs;
 using EnterpriseAIAssistant.Application.Interfaces;
 
 namespace EnterpriseAIAssistant.Application.Services
 {
     public sealed class RagService(
         IKnowledgeRetriever knowledgeRetriever,
+        IContextRelevanceEvaluator contextRelevanceEvaluator,
         IAIChatService aiChatService) : IRagService
     {
         private const string NoContextMessage =
@@ -18,12 +20,10 @@ namespace EnterpriseAIAssistant.Application.Services
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(question);
 
-            // 1. Retrieve relevant document chunks.
             var retrievedChunks = await knowledgeRetriever.SearchAsync(
                 question,
                 cancellationToken: cancellationToken);
 
-            // 2. Do not call the LLM if retrieval returns nothing.
             if (retrievedChunks.Count == 0)
             {
                 return new RagResponse(
@@ -31,8 +31,19 @@ namespace EnterpriseAIAssistant.Application.Services
                     Array.Empty<RagSource>());
             }
 
-            // 3. Generate an answer using the original question
-            // and the retrieved document context.
+            var isContextSufficient =
+                await contextRelevanceEvaluator.IsContextSufficientAsync(
+                    question,
+                    retrievedChunks,
+                    cancellationToken);
+
+            if (!isContextSufficient)
+            {
+                return new RagResponse(
+                    NoContextMessage,
+                    Array.Empty<RagSource>());
+            }
+
             var answer = await aiChatService.GenerateGroundedResponseAsync(
                 question,
                 retrievedChunks,
@@ -40,7 +51,6 @@ namespace EnterpriseAIAssistant.Application.Services
                 userId,
                 cancellationToken);
 
-            // 4. Map retrieved chunks to source references.
             var sources = retrievedChunks
                 .Select(result => new RagSource(
                     result.Chunk.DocumentId,
@@ -53,7 +63,6 @@ namespace EnterpriseAIAssistant.Application.Services
                 })
                 .ToArray();
 
-            // 5. Return the answer and its sources.
             return new RagResponse(answer, sources);
         }
     }

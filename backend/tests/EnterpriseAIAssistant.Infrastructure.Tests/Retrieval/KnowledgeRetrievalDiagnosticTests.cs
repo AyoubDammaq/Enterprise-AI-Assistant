@@ -178,6 +178,7 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
 
             var positiveQueriesWithExpectedSourceFound = 0;
             var negativeQueriesWithRetrievedChunks = 0;
+            var negativeQueriesWithoutRetrievedChunks = 0;
 
             foreach (var testCase in testCases)
             {
@@ -211,8 +212,10 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                     }
                     else
                     {
+                        negativeQueriesWithoutRetrievedChunks++;
+
                         Console.WriteLine(
-                            "Negative query: no chunks retrieved.");
+                            "Negative query: no chunks retrieved. Abstention expected.");
                     }
 
                     continue;
@@ -252,12 +255,11 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                     negativeQueriesWithRetrievedChunks++;
 
                     Console.WriteLine(
-                        "Negative query: chunks were retrieved, " +
-                        "but no source is expected.");
+                        "Negative query: potentially irrelevant chunks retrieved.");
 
                     Console.WriteLine(
-                        "Review these results manually; retrieval alone " +
-                        "cannot determine whether the answer is supported.");
+                        "Manual relevance review required. No answer should be generated " +
+                        "without admissible evidence.");
                 }
             }
 
@@ -274,28 +276,55 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 RetrievalMetrics.CalculateMeanReciprocalRank(
                     evaluationSamples);
 
-            // Display the evaluation report.
+            // Separate positive and negative test cases.
+            var positiveQueryCount = testCases.Count(
+                testCase => testCase.ExpectedSource is not null);
+
+            var negativeQueryCount = testCases.Count(
+                testCase => testCase.ExpectedSource is null);
+
+            // Display the positive retrieval evaluation report.
             Console.WriteLine();
-            Console.WriteLine("========== RAG EVALUATION REPORT ==========");
+            Console.WriteLine("========== POSITIVE RETRIEVAL EVALUATION ==========");
+
             Console.WriteLine($"Total queries: {testCases.Length}");
-            Console.WriteLine($"Positive queries: {evaluationSamples.Count}");
-            Console.WriteLine(
-                $"Negative queries: {testCases.Length - evaluationSamples.Count}");
+            Console.WriteLine($"Positive queries: {positiveQueryCount}");
+            Console.WriteLine($"Negative queries: {negativeQueryCount}");
+
             Console.WriteLine($"Knowledge documents: {knowledgeSources.Count}");
             Console.WriteLine($"Chunks indexed: {indexedCount}");
 
             Console.WriteLine(
                 $"Positive queries with expected source found: " +
-                $"{positiveQueriesWithExpectedSourceFound}/{evaluationSamples.Count}");
+                $"{positiveQueriesWithExpectedSourceFound}/{positiveQueryCount}");
+
+            Console.WriteLine($"Hit Rate @1: {hitRateAt1:P2}");
+            Console.WriteLine($"Hit Rate @2: {hitRateAt2:P2}");
+            Console.WriteLine($"MRR: {meanReciprocalRank:F4}");
+
+            Console.WriteLine("====================================================");
+
+            // Display the negative-query and abstention evaluation report.
+            Console.WriteLine();
+            Console.WriteLine("========== NEGATIVE QUERY / ABSTENTION EVALUATION ==========");
+
+            Console.WriteLine($"Negative queries: {negativeQueryCount}");
+
+            Console.WriteLine(
+                $"Negative queries with no retrieved chunks: " +
+                $"{negativeQueriesWithoutRetrievedChunks}");
 
             Console.WriteLine(
                 $"Negative queries with retrieved chunks: " +
                 $"{negativeQueriesWithRetrievedChunks}");
 
-            Console.WriteLine($"Hit Rate @1: {hitRateAt1:P2}");
-            Console.WriteLine($"Hit Rate @2: {hitRateAt2:P2}");
-            Console.WriteLine($"MRR: {meanReciprocalRank:F4}");
-            Console.WriteLine("============================================");
+            Console.WriteLine(
+                "Negative queries with retrieved chunks require relevance validation.");
+
+            Console.WriteLine(
+                "Retrieval results alone do not prove that an answer is supported.");
+
+            Console.WriteLine("============================================================");
         }
     }
 }
