@@ -1,12 +1,16 @@
 ﻿using EnterpriseAIAssistant.Application.Interfaces;
 using EnterpriseAIAssistant.Infrastructure.Documents;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval;
 
 public sealed class RagPipelineIntegrationTests
 {
+    private static InMemoryVectorStore CreateStore() =>
+        new(NullLogger<InMemoryVectorStore>.Instance);
+
     [Fact]
     public async Task RagPipeline_WithRealOllamaEmbeddings_RetrievesRelevantDocument()
     {
@@ -62,7 +66,7 @@ public sealed class RagPipelineIntegrationTests
                     EmbeddingDimensions = 768
                 }));
 
-            IVectorStore vectorStore = new InMemoryVectorStore();
+            IVectorStore vectorStore = CreateStore();
 
             var indexer = new KnowledgeIndexer(
                 embeddingService,

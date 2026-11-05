@@ -1,11 +1,15 @@
 using EnterpriseAIAssistant.Application.DTOs;
 using EnterpriseAIAssistant.Application.Interfaces;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval;
 
 public sealed class KnowledgeServicesTests
 {
+    private static InMemoryVectorStore CreateStore() =>
+        new(NullLogger<InMemoryVectorStore>.Instance);
+
     [Fact]
     public async Task Indexer_EmbedsChunksAndStoresThem()
     {
@@ -15,7 +19,7 @@ public sealed class KnowledgeServicesTests
                 ? new float[] { 1, 0 }
                 : new float[] { 0, 1 });
 
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
         var indexer = new KnowledgeIndexer(embeddings, store);
 
         var chunks = new[]
@@ -57,7 +61,7 @@ public sealed class KnowledgeServicesTests
     public async Task Indexer_EmptyInput_ReturnsZeroWithoutCallingEmbeddingService()
     {
         var embeddings = new FakeEmbeddingService(_ => new float[] { 1, 0 });
-        var indexer = new KnowledgeIndexer(embeddings, new InMemoryVectorStore());
+        var indexer = new KnowledgeIndexer(embeddings, CreateStore());
 
         var result = await indexer.IndexAsync(Array.Empty<DocumentChunk>());
 
@@ -73,7 +77,7 @@ public sealed class KnowledgeServicesTests
             : text.Contains("password", StringComparison.OrdinalIgnoreCase)
                 ? new float[] { 0.9f, 0.1f }
                 : new float[] { 0, 1 });
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
         await store.UpsertAsync(new[]
         {
             Embedded("colors.md", "Product color guide", new float[] { 0, 1 }),
@@ -95,7 +99,7 @@ public sealed class KnowledgeServicesTests
     {
         var retriever = new KnowledgeRetriever(
             new FakeEmbeddingService(_ => new float[] { 1, 0 }),
-            new InMemoryVectorStore());
+            CreateStore());
 
         await Assert.ThrowsAsync<ArgumentException>(() => retriever.SearchAsync(query));
     }
@@ -104,7 +108,7 @@ public sealed class KnowledgeServicesTests
     public async Task Retriever_InvalidTopK_ThrowsBeforeEmbeddingCall()
     {
         var embeddings = new FakeEmbeddingService(_ => new float[] { 1, 0 });
-        var retriever = new KnowledgeRetriever(embeddings, new InMemoryVectorStore());
+        var retriever = new KnowledgeRetriever(embeddings, CreateStore());
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => retriever.SearchAsync("test", topK: 0));

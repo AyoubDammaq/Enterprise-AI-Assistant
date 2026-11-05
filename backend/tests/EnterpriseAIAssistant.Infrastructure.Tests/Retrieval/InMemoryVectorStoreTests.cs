@@ -1,14 +1,18 @@
 using EnterpriseAIAssistant.Application.DTOs;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval;
 
 public sealed class InMemoryVectorStoreTests
 {
+    private static InMemoryVectorStore CreateStore() =>
+        new(NullLogger<InMemoryVectorStore>.Instance);
+
     [Fact]
     public async Task SearchAsync_RanksByCosineSimilarity_AndReturnsAtMostTopK()
     {
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
         await store.UpsertAsync(new[]
         {
             Embedded("password-reset.md", 0, "Reset a forgotten password.", new float[] { 1, 0 }),
@@ -28,7 +32,7 @@ public sealed class InMemoryVectorStoreTests
     [Fact]
     public async Task SearchAsync_EmptyCorpus_ReturnsEmptyResults()
     {
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
 
         var results = await store.SearchAsync(new float[] { 1, 0 }, topK: 5);
 
@@ -38,7 +42,7 @@ public sealed class InMemoryVectorStoreTests
     [Fact]
     public async Task UpsertAsync_EmptyBatch_DoesNotFail()
     {
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
 
         await store.UpsertAsync(Array.Empty<EmbeddedChunk>());
 
@@ -48,7 +52,7 @@ public sealed class InMemoryVectorStoreTests
     [Fact]
     public async Task UpsertAsync_SameDocumentAndChunkIndex_ReplacesExistingChunk()
     {
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();  
         await store.UpsertAsync(new[]
         {
             Embedded("guide.md", 0, "old content", new float[] { 1, 0 })
@@ -68,7 +72,7 @@ public sealed class InMemoryVectorStoreTests
     [Fact]
     public async Task UpsertAsync_DimensionMismatchWithExistingStore_Throws()
     {
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
         await store.UpsertAsync(new[]
         {
             Embedded("first.md", 0, "first", new float[] { 1, 0 })
@@ -83,7 +87,7 @@ public sealed class InMemoryVectorStoreTests
     [Fact]
     public async Task UpsertAsync_InconsistentDimensionsWithinBatch_ThrowsBeforeWriting()
     {
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
 
         await Assert.ThrowsAsync<ArgumentException>(() => store.UpsertAsync(new[]
         {
@@ -97,7 +101,7 @@ public sealed class InMemoryVectorStoreTests
     [Fact]
     public async Task SearchAsync_QueryDimensionMismatch_Throws()
     {
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
         await store.UpsertAsync(new[]
         {
             Embedded("first.md", 0, "first", new float[] { 1, 0 })
@@ -113,7 +117,7 @@ public sealed class InMemoryVectorStoreTests
     [InlineData(21)]
     public async Task SearchAsync_InvalidTopK_Throws(int topK)
     {
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => store.SearchAsync(new float[] { 1, 0 }, topK));
@@ -122,7 +126,7 @@ public sealed class InMemoryVectorStoreTests
     [Fact]
     public async Task SearchAsync_ZeroVector_Throws()
     {
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => store.SearchAsync(new float[] { 0, 0 }, topK: 1));
@@ -131,19 +135,12 @@ public sealed class InMemoryVectorStoreTests
     [Fact]
     public async Task SearchAsync_CancelledToken_Throws()
     {
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => store.SearchAsync(new float[] { 1, 0 }, topK: 1, cancellation.Token));
-    }
-
-    [Fact]
-    public void CosineSimilarity_ZeroVector_Throws()
-    {
-        Assert.Throws<ArgumentException>(
-            () => CosineSimilarity.Calculate(new float[] { 0, 0 }, new float[] { 1, 0 }));
     }
 
     private static EmbeddedChunk Embedded(
@@ -160,7 +157,7 @@ public sealed class InMemoryVectorStoreTests
     public async Task SearchAsync_ExcludesChunksBelowMinimumSimilarityScore()
     {
         // Arrange
-        var vectorStore = new InMemoryVectorStore();
+        var vectorStore = CreateStore();
 
         var chunks = new[]
         {
@@ -194,7 +191,7 @@ public sealed class InMemoryVectorStoreTests
     public async Task SearchAsync_ReturnsChunksAboveMinimumSimilarityScore()
     {
         // Arrange
-        var vectorStore = new InMemoryVectorStore();
+        var vectorStore = CreateStore();
 
         var chunks = new[]
         {
@@ -233,7 +230,7 @@ public sealed class InMemoryVectorStoreTests
     public async Task SearchAsync_ReturnsEmptyList_WhenAllChunksAreBelowMinimumSimilarityScore()
     {
         // Arrange
-        var vectorStore = new InMemoryVectorStore();
+        var vectorStore = CreateStore();
 
         var chunks = new[]
         {
@@ -257,6 +254,121 @@ public sealed class InMemoryVectorStoreTests
 
         // Assert
         Assert.Empty(results);
+    }
+
+
+    [Fact]
+    public async Task UpsertAsync_InvalidVector_Throws()
+    {
+        var store = CreateStore();
+
+        var chunks = new[]
+        {
+        Embedded(
+            "invalid.md",
+            0,
+            "Invalid embedding",
+            new float[] { float.NaN, 1 })
+    };
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => store.UpsertAsync(chunks));
+
+        Assert.Empty(
+            await store.SearchAsync(new float[] { 1, 0 }, topK: 5));
+    }
+
+    [Fact]
+    public async Task UpsertAsync_ZeroVector_Throws()
+    {
+        var store = CreateStore();
+
+        var chunks = new[]
+        {
+        Embedded(
+            "zero.md",
+            0,
+            "Zero embedding",
+            new float[] { 0, 0 })
+    };
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => store.UpsertAsync(chunks));
+    }
+
+    [Fact]
+    public async Task UpsertAsync_CancelledToken_Throws()
+    {
+        var store = CreateStore();
+
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => store.UpsertAsync(
+                new[]
+                {
+                Embedded(
+                    "document.md",
+                    0,
+                    "Content",
+                    new float[] { 1, 0 })
+                },
+                cancellation.Token));
+    }
+
+    [Fact]
+    public async Task UpsertAsync_FailedBatch_DoesNotPartiallyModifyStore()
+    {
+        var store = CreateStore();
+
+        await store.UpsertAsync(new[]
+        {
+        Embedded("existing.md", 0, "Original content", new float[] { 1, 0 })
+    });
+
+        var invalidBatch = new[]
+        {
+        Embedded("existing.md", 0, "Modified content", new float[] { 0, 1 }),
+        Embedded("new.md", 0, "New content", new float[] { 1, 0, 0 })
+    };
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => store.UpsertAsync(invalidBatch));
+
+        var results = await store.SearchAsync(
+            new float[] { 1, 0 },
+            topK: 5);
+
+        var result = Assert.Single(results);
+
+        Assert.Equal("Original content", result.Chunk.Content);
+    }
+
+    [Fact]
+    public async Task SearchAsync_ExactMinimumSimilarityScore_IncludesChunk()
+    {
+        var store = CreateStore();
+
+        await store.UpsertAsync(new[]
+        {
+        Embedded(
+            "boundary.md",
+            0,
+            "Boundary content",
+            new float[] { 0.5f, MathF.Sqrt(0.75f) })
+    });
+
+        var results = await store.SearchAsync(
+            new float[] { 1, 0 },
+            topK: 5);
+
+        var result = Assert.Single(results);
+
+        Assert.Equal(
+            InMemoryVectorStore.MinimumSimilarityScore,
+            result.SimilarityScore,
+            precision: 6);
     }
 
     private static EmbeddedChunk CreateEmbeddedChunk(

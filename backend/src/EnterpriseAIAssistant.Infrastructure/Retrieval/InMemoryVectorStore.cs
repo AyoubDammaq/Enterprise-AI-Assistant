@@ -1,5 +1,6 @@
 using EnterpriseAIAssistant.Application.DTOs;
 using EnterpriseAIAssistant.Application.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace EnterpriseAIAssistant.Infrastructure.Retrieval;
 
@@ -7,13 +8,14 @@ namespace EnterpriseAIAssistant.Infrastructure.Retrieval;
 /// Process-local vector store. Data is lost when the application stops.
 /// The lock protects mutations and snapshots because the service is registered as a singleton.
 /// </summary>
-public sealed class InMemoryVectorStore : IVectorStore
+public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger) : IVectorStore
 {
     public const int MaximumTopK = 20;
     public const double MinimumSimilarityScore = 0.50;
     private readonly object _gate = new();
     private readonly Dictionary<(string DocumentId, int ChunkIndex), EmbeddedChunk> _chunks = new();
     private int? _vectorDimensions;
+    private readonly ILogger<InMemoryVectorStore> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public Task UpsertAsync(
         IReadOnlyCollection<EmbeddedChunk> chunks,
@@ -84,13 +86,6 @@ public sealed class InMemoryVectorStore : IVectorStore
         ValidateVector(queryEmbedding, nameof(queryEmbedding));
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (topK is < 1 or > MaximumTopK)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(topK),
-                $"topK must be between 1 and {MaximumTopK}.");
-        }
-
         List<EmbeddedChunk> snapshot;
         lock (_gate)
         {
@@ -115,10 +110,11 @@ public sealed class InMemoryVectorStore : IVectorStore
         {
             cancellationToken.ThrowIfCancellationRequested();
             var score = CosineSimilarity.Calculate(queryEmbedding, item.Embedding);
-            Console.WriteLine(
-                $"[RAG] Source={item.Chunk.Source}, " +
-                $"Chunk={item.Chunk.ChunkIndex}, " +
-                $"Similarity={score:F4}");
+            _logger.LogDebug(
+                "[RAG] Source={Source}, Chunk={Chunk}, Similarity={Similarity:F4}",
+                item.Chunk.Source,
+                item.Chunk.ChunkIndex,
+                score);
             ranked.Add(new RetrievedChunk(item.Chunk, score));
         }
 

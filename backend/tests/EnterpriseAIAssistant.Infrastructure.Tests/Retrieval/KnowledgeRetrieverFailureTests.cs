@@ -1,11 +1,15 @@
 ﻿using EnterpriseAIAssistant.Application.DTOs;
 using EnterpriseAIAssistant.Application.Interfaces;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval;
 
 public sealed class KnowledgeRetrieverFailureTests
 {
+    private static InMemoryVectorStore CreateStore() =>
+        new(NullLogger<InMemoryVectorStore>.Instance);
+
     [Fact]
     public async Task SearchAsync_EmbeddingFailure_PropagatesException()
     {
@@ -14,7 +18,7 @@ public sealed class KnowledgeRetrieverFailureTests
 
         var retriever = new KnowledgeRetriever(
             embeddingService,
-            new InMemoryVectorStore());
+            CreateStore());
 
         await Assert.ThrowsAsync<HttpRequestException>(
             () => retriever.SearchAsync("password reset"));

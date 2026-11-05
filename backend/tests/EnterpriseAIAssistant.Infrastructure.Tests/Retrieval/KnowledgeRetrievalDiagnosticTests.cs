@@ -1,6 +1,8 @@
-﻿using EnterpriseAIAssistant.Application.Interfaces;
+﻿
+using EnterpriseAIAssistant.Application.Interfaces;
 using EnterpriseAIAssistant.Infrastructure.Documents;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
@@ -8,18 +10,15 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
     [Trait("Category", "Integration")]
     public sealed class KnowledgeRetrievalDiagnosticTests
     {
+        private static InMemoryVectorStore CreateStore() =>
+            new(NullLogger<InMemoryVectorStore>.Instance);
+
         [Fact]
         public async Task DiagnoseRetrieval_WithRealOllamaEmbeddings()
         {
-            // Arrange: use the actual project document directory.
+            // Arrange: load the evaluation corpus.
             var documentsPath =
                 Environment.GetEnvironmentVariable("RAG_DOCUMENTS_PATH");
-
-            if (string.IsNullOrWhiteSpace(documentsPath))
-            {
-                throw new InvalidOperationException(
-                    "Set the RAG_DOCUMENTS_PATH environment variable.");
-            }
 
             Assert.False(
                 string.IsNullOrWhiteSpace(documentsPath),
@@ -52,7 +51,7 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                         EmbeddingDimensions = 768
                     }));
 
-            IVectorStore vectorStore = new InMemoryVectorStore();
+            IVectorStore vectorStore = CreateStore();
 
             IKnowledgeIndexer indexer = new KnowledgeIndexer(
                 embeddingService,
@@ -62,11 +61,63 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 embeddingService,
                 vectorStore);
 
-            // Load and index the real documents.
-            var chunks = await documentLoader.LoadAsync(documentsPath);
+            // Load all files from the RAG directory.
+            var loadedChunks =
+                await documentLoader.LoadAsync(documentsPath!);
+
+            Assert.NotEmpty(loadedChunks);
+
+            // Verify that all four expected files exist.
+            var expectedFiles = new[]
+            {
+                "support-faq.md",
+                "product-guide.md",
+                "troubleshooting.md",
+                "evaluation-questions.md"
+            };
+
+            var loadedSources = loadedChunks
+                .Select(chunk => chunk.Source)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var expectedFile in expectedFiles)
+            {
+                Assert.Contains(
+                    loadedSources,
+                    source => string.Equals(
+                        Path.GetFileName(source),
+                        expectedFile,
+                        StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Exclude evaluation-questions.md from the knowledge corpus.
+            var chunks = loadedChunks
+                .Where(chunk =>
+                    !string.Equals(
+                        Path.GetFileName(chunk.Source),
+                        "evaluation-questions.md",
+                        StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
             Assert.NotEmpty(chunks);
 
+            // Verify that evaluation questions are not indexed.
+            Assert.DoesNotContain(
+                chunks,
+                chunk => string.Equals(
+                    Path.GetFileName(chunk.Source),
+                    "evaluation-questions.md",
+                    StringComparison.OrdinalIgnoreCase));
+
+            var knowledgeSources = chunks
+                .Select(chunk => chunk.Source)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            Assert.Equal(3, knowledgeSources.Count);
+
+            // Index only the three knowledge documents.
             var indexedCount = await indexer.IndexAsync(chunks);
 
             Assert.Equal(chunks.Count, indexedCount);
@@ -74,47 +125,68 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
             Console.WriteLine();
             Console.WriteLine("========== RAG RETRIEVAL DIAGNOSTIC ==========");
             Console.WriteLine($"Documents path: {documentsPath}");
+            Console.WriteLine($"Total files loaded: {loadedSources.Count}");
+            Console.WriteLine($"Knowledge documents: {knowledgeSources.Count}");
+            Console.WriteLine($"Evaluation files excluded: 1");
+            Console.WriteLine($"Knowledge chunks loaded: {chunks.Count}");
             Console.WriteLine($"Chunks indexed: {indexedCount}");
 
+            // Positive questions have an expected source.
+            // Negative questions intentionally have no expected source.
             var testCases = new[]
             {
                 (
                     Id: "Q1",
-                    Question: "Which architectural layers does the backend follow?",
-                    ExpectedSource: "company-info.md"
+                    Question: "How can I reset my password?",
+                    ExpectedSource: (string?)"support-faq.md"
                 ),
                 (
                     Id: "Q2",
-                    Question: "Which technologies are used by the backend?",
-                    ExpectedSource: "company-info.md"
+                    Question: "After how many failed attempts is an account locked, and when is it unlocked?",
+                    ExpectedSource: (string?)"support-faq.md"
                 ),
                 (
                     Id: "Q3",
-                    Question: "What AI capabilities does the application support?",
-                    ExpectedSource: "company-info.md"
+                    Question: "What is the low stock threshold?",
+                    ExpectedSource: (string?)"product-guide.md"
                 ),
                 (
                     Id: "Q4",
-                    Question: "What type of internal information does the assistant use to answer questions?",
-                    ExpectedSource: "products.txt"
+                    Question: "What role and permissions does the Administrator have?",
+                    ExpectedSource: (string?)"product-guide.md"
                 ),
                 (
                     Id: "Q5",
-                    Question: "Which embedding model and chat model does the application use?",
-                    ExpectedSource: "products.txt"
+                    Question: "How can I resolve error INV-001?",
+                    ExpectedSource: (string?)"troubleshooting.md"
+                ),
+                (
+                    Id: "Q6",
+                    Question: "What is the monthly price?",
+                    ExpectedSource: (string?)null
+                ),
+                (
+                    Id: "Q7",
+                    Question: "Which database engine is used in production?",
+                    ExpectedSource: (string?)null
                 )
             };
 
-            // Collect retrieval results for metric calculation.
+            // Only positive questions contribute to Hit Rate and MRR.
             var evaluationSamples =
                 new List<RetrievalEvaluationSample>();
+
+            var positiveQueriesWithExpectedSourceFound = 0;
+            var negativeQueriesWithRetrievedChunks = 0;
 
             foreach (var testCase in testCases)
             {
                 Console.WriteLine();
                 Console.WriteLine($"--- {testCase.Id} ---");
                 Console.WriteLine($"Question: {testCase.Question}");
-                Console.WriteLine($"Expected source: {testCase.ExpectedSource}");
+
+                Console.WriteLine(
+                    $"Expected source: {testCase.ExpectedSource ?? "NONE (negative query)"}");
 
                 var results = await retriever.SearchAsync(
                     testCase.Question,
@@ -124,16 +196,25 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                     .Select(result => result.Chunk.Source)
                     .ToList();
 
-                // Save the evaluation sample, including empty results.
-                evaluationSamples.Add(
-                    new RetrievalEvaluationSample(
-                        testCase.ExpectedSource,
-                        retrievedSources));
-
                 if (results.Count == 0)
                 {
                     Console.WriteLine("Retrieved chunks: NONE");
-                    Console.WriteLine("Expected source found: NO");
+
+                    if (testCase.ExpectedSource is not null)
+                    {
+                        evaluationSamples.Add(
+                            new RetrievalEvaluationSample(
+                                testCase.ExpectedSource,
+                                retrievedSources));
+
+                        Console.WriteLine("Expected source found: NO");
+                    }
+                    else
+                    {
+                        Console.WriteLine(
+                            "Negative query: no chunks retrieved.");
+                    }
+
                     continue;
                 }
 
@@ -147,15 +228,40 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                     Console.WriteLine($"Content: {result.Chunk.Content}");
                 }
 
-                var found = retrievedSources.Contains(
-                    testCase.ExpectedSource,
-                    StringComparer.OrdinalIgnoreCase);
+                if (testCase.ExpectedSource is not null)
+                {
+                    var found = retrievedSources.Contains(
+                        testCase.ExpectedSource,
+                        StringComparer.OrdinalIgnoreCase);
 
-                Console.WriteLine(
-                    $"Expected source found: {(found ? "YES" : "NO")}");
+                    evaluationSamples.Add(
+                        new RetrievalEvaluationSample(
+                            testCase.ExpectedSource,
+                            retrievedSources));
+
+                    if (found)
+                    {
+                        positiveQueriesWithExpectedSourceFound++;
+                    }
+
+                    Console.WriteLine(
+                        $"Expected source found: {(found ? "YES" : "NO")}");
+                }
+                else
+                {
+                    negativeQueriesWithRetrievedChunks++;
+
+                    Console.WriteLine(
+                        "Negative query: chunks were retrieved, " +
+                        "but no source is expected.");
+
+                    Console.WriteLine(
+                        "Review these results manually; retrieval alone " +
+                        "cannot determine whether the answer is supported.");
+                }
             }
 
-            // Calculate retrieval evaluation metrics.
+            // Calculate metrics using positive queries only.
             var hitRateAt1 =
                 RetrievalMetrics.CalculateHitRateAtK(
                     evaluationSamples, k: 1);
@@ -168,11 +274,24 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 RetrievalMetrics.CalculateMeanReciprocalRank(
                     evaluationSamples);
 
-            // Display the final evaluation report.
+            // Display the evaluation report.
             Console.WriteLine();
             Console.WriteLine("========== RAG EVALUATION REPORT ==========");
-            Console.WriteLine($"Total queries: {evaluationSamples.Count}");
+            Console.WriteLine($"Total queries: {testCases.Length}");
+            Console.WriteLine($"Positive queries: {evaluationSamples.Count}");
+            Console.WriteLine(
+                $"Negative queries: {testCases.Length - evaluationSamples.Count}");
+            Console.WriteLine($"Knowledge documents: {knowledgeSources.Count}");
             Console.WriteLine($"Chunks indexed: {indexedCount}");
+
+            Console.WriteLine(
+                $"Positive queries with expected source found: " +
+                $"{positiveQueriesWithExpectedSourceFound}/{evaluationSamples.Count}");
+
+            Console.WriteLine(
+                $"Negative queries with retrieved chunks: " +
+                $"{negativeQueriesWithRetrievedChunks}");
+
             Console.WriteLine($"Hit Rate @1: {hitRateAt1:P2}");
             Console.WriteLine($"Hit Rate @2: {hitRateAt2:P2}");
             Console.WriteLine($"MRR: {meanReciprocalRank:F4}");

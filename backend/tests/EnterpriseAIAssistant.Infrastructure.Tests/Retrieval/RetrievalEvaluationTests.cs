@@ -2,18 +2,22 @@
 using EnterpriseAIAssistant.Application.DTOs;
 using EnterpriseAIAssistant.Application.Interfaces;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval;
 
 public sealed class RetrievalEvaluationTests
 {
+    private static InMemoryVectorStore CreateStore() =>
+        new(NullLogger<InMemoryVectorStore>.Instance);
+
     [Fact]
     public async Task SearchAsync_RanksRelevantDocumentFirst()
     {
         // Arrange
         var embeddings = new FakeEmbeddingService(_ => [1f, 0f]);
 
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
 
         await store.UpsertAsync(
         [
@@ -42,7 +46,7 @@ public sealed class RetrievalEvaluationTests
         // Arrange
         var embeddings = new FakeEmbeddingService(_ => [1f, 0f]);
 
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
 
         await store.UpsertAsync(
         [
@@ -77,7 +81,7 @@ public sealed class RetrievalEvaluationTests
         // Arrange
         var embeddings = new FakeEmbeddingService(_ => [1f, 0f]);
 
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
 
         await store.UpsertAsync(
         [
@@ -105,7 +109,7 @@ public sealed class RetrievalEvaluationTests
         // Arrange
         var embeddings = new FakeEmbeddingService(_ => [1f, 0f]);
 
-        var store = new InMemoryVectorStore();
+        var store = CreateStore();
 
         await store.UpsertAsync(
         [
