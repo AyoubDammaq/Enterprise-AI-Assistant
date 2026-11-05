@@ -1,13 +1,15 @@
 using EnterpriseAIAssistant.Application.DTOs;
+using EnterpriseAIAssistant.Infrastructure.Configuration;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval;
 
 public sealed class InMemoryVectorStoreTests
 {
-    private static InMemoryVectorStore CreateStore() =>
-        new(NullLogger<InMemoryVectorStore>.Instance);
+    private static InMemoryVectorStore CreateStore(double minimumSimilarityScore = 0.50) =>
+        new(NullLogger<InMemoryVectorStore>.Instance, Options.Create(new RetrievalOptions { MinimumSimilarityScore = minimumSimilarityScore }));
 
     [Fact]
     public async Task SearchAsync_RanksByCosineSimilarity_AndReturnsAtMostTopK()
@@ -184,7 +186,7 @@ public sealed class InMemoryVectorStoreTests
         Assert.Equal("relevant.md", results[0].Chunk.Source);
         Assert.True(
             results[0].SimilarityScore >=
-            InMemoryVectorStore.MinimumSimilarityScore);
+            0.50);
     }
 
     [Fact]
@@ -219,7 +221,7 @@ public sealed class InMemoryVectorStoreTests
         Assert.All(results, result =>
             Assert.True(
                 result.SimilarityScore >=
-                InMemoryVectorStore.MinimumSimilarityScore));
+                0.50));
 
         Assert.Equal(
             "high-relevance.md",
@@ -366,9 +368,36 @@ public sealed class InMemoryVectorStoreTests
         var result = Assert.Single(results);
 
         Assert.Equal(
-            InMemoryVectorStore.MinimumSimilarityScore,
+            0.50,
             result.SimilarityScore,
             precision: 6);
+    }
+
+    [Fact]
+    public async Task SearchAsync_UsesConfiguredMinimumSimilarityScore()
+    {
+        // Arrange
+        var store = CreateStore(minimumSimilarityScore: 0.80);
+
+        await store.UpsertAsync(
+        [
+            CreateEmbeddedChunk(
+            "doc-1", "high-relevance.md", 0,
+            [1f, 0f]),
+
+        CreateEmbeddedChunk(
+            "doc-2", "medium-relevance.md", 0,
+            [0.8f, 0.6f])
+        ]);
+
+        // Act
+        var results = await store.SearchAsync(
+            new float[] { 1f, 0f },
+            topK: 5);
+
+        // Assert
+        var result = Assert.Single(results);
+        Assert.Equal("high-relevance.md", result.Chunk.Source);
     }
 
     private static EmbeddedChunk CreateEmbeddedChunk(

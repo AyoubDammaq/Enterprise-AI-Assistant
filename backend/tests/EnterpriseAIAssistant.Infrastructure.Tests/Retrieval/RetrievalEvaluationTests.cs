@@ -1,15 +1,16 @@
-﻿
-using EnterpriseAIAssistant.Application.DTOs;
+﻿using EnterpriseAIAssistant.Application.DTOs;
 using EnterpriseAIAssistant.Application.Interfaces;
+using EnterpriseAIAssistant.Infrastructure.Configuration;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval;
 
 public sealed class RetrievalEvaluationTests
 {
-    private static InMemoryVectorStore CreateStore() =>
-        new(NullLogger<InMemoryVectorStore>.Instance);
+    private static InMemoryVectorStore CreateStore(double minimumSimilarityScore = 0.50) =>
+        new(NullLogger<InMemoryVectorStore>.Instance, Options.Create(new RetrievalOptions { MinimumSimilarityScore = minimumSimilarityScore }));
 
     [Fact]
     public async Task SearchAsync_RanksRelevantDocumentFirst()
@@ -25,7 +26,7 @@ public sealed class RetrievalEvaluationTests
             Embedded("company-info.md", "Company architecture", [1f, 0f])
         ]);
 
-        var retriever = new KnowledgeRetriever(embeddings, store);
+        var retriever = new KnowledgeRetriever(embeddings, store, Options.Create(new RetrievalOptions { TopK = 5 }));
 
         // Act
         var results = await retriever.SearchAsync(
@@ -54,7 +55,7 @@ public sealed class RetrievalEvaluationTests
             Embedded("products.txt", "Product information", [0.8f, 0.6f])
         ]);
 
-        var retriever = new KnowledgeRetriever(embeddings, store);
+        var retriever = new KnowledgeRetriever(embeddings, store, Options.Create(new RetrievalOptions { TopK = 5 }));
 
         // Act
         var results = await retriever.SearchAsync("Product information", topK: 2);
@@ -89,7 +90,7 @@ public sealed class RetrievalEvaluationTests
             Embedded("irrelevant.md", "Irrelevant document", [0f, 1f])
         ]);
 
-        var retriever = new KnowledgeRetriever(embeddings, store);
+        var retriever = new KnowledgeRetriever(embeddings, store, Options.Create(new RetrievalOptions { TopK = 5 }));
 
         // Act
         var results = await retriever.SearchAsync("Relevant document");
@@ -100,7 +101,7 @@ public sealed class RetrievalEvaluationTests
         Assert.Equal("relevant.md", result.Chunk.Source);
         Assert.True(
             result.SimilarityScore >=
-            InMemoryVectorStore.MinimumSimilarityScore);
+            0.50);
     }
 
     [Fact]
@@ -117,7 +118,7 @@ public sealed class RetrievalEvaluationTests
             Embedded("products.txt", "Product information", [-1f, 0f])
         ]);
 
-        var retriever = new KnowledgeRetriever(embeddings, store);
+        var retriever = new KnowledgeRetriever(embeddings, store, Options.Create(new RetrievalOptions { TopK = 5 }));
 
         // Act
         var results = await retriever.SearchAsync(

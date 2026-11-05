@@ -1,5 +1,5 @@
-﻿
-using EnterpriseAIAssistant.Application.Interfaces;
+﻿using EnterpriseAIAssistant.Application.Interfaces;
+using EnterpriseAIAssistant.Infrastructure.Configuration;
 using EnterpriseAIAssistant.Infrastructure.Documents;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -10,8 +10,8 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
     [Trait("Category", "Integration")]
     public sealed class KnowledgeRetrievalDiagnosticTests
     {
-        private static InMemoryVectorStore CreateStore() =>
-            new(NullLogger<InMemoryVectorStore>.Instance);
+        private static InMemoryVectorStore CreateStore(double minimumSimilarityScore = 0.50) =>
+            new(NullLogger<InMemoryVectorStore>.Instance, Options.Create(new RetrievalOptions { MinimumSimilarityScore = minimumSimilarityScore }));
 
         [Fact]
         public async Task DiagnoseRetrieval_WithRealOllamaEmbeddings()
@@ -59,7 +59,8 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
 
             IKnowledgeRetriever retriever = new KnowledgeRetriever(
                 embeddingService,
-                vectorStore);
+                vectorStore,
+                Options.Create(new RetrievalOptions { TopK = 5 }));
 
             // Load all files from the RAG directory.
             var loadedChunks =

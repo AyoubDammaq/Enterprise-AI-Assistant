@@ -1,4 +1,5 @@
 ﻿using EnterpriseAIAssistant.Application.Interfaces;
+using EnterpriseAIAssistant.Infrastructure.Configuration;
 using EnterpriseAIAssistant.Infrastructure.Documents;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -6,10 +7,11 @@ using Microsoft.Extensions.Options;
 
 namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval;
 
+[Trait("Category", "Integration")]
 public sealed class RagPipelineIntegrationTests
 {
-    private static InMemoryVectorStore CreateStore() =>
-        new(NullLogger<InMemoryVectorStore>.Instance);
+    private static InMemoryVectorStore CreateStore(double minimumSimilarityScore = 0.50) =>
+        new(NullLogger<InMemoryVectorStore>.Instance, Options.Create(new RetrievalOptions { MinimumSimilarityScore = minimumSimilarityScore }));
 
     [Fact]
     public async Task RagPipeline_WithRealOllamaEmbeddings_RetrievesRelevantDocument()
@@ -74,7 +76,8 @@ public sealed class RagPipelineIntegrationTests
 
             var retriever = new KnowledgeRetriever(
                 embeddingService,
-                vectorStore);
+                vectorStore,
+                Options.Create(new RetrievalOptions { TopK = 5 }));
 
             // Act: load documents, generate embeddings, and index them.
             var chunks = await documentLoader.LoadAsync();
@@ -104,7 +107,7 @@ public sealed class RagPipelineIntegrationTests
             Assert.All(results, result =>
                 Assert.True(
                     result.SimilarityScore >=
-                    InMemoryVectorStore.MinimumSimilarityScore));
+                    0.50));
 
             Assert.True(
                 double.IsFinite(results[0].SimilarityScore));

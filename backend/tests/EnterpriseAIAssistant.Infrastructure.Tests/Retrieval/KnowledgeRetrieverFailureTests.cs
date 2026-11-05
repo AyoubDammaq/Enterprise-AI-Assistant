@@ -1,14 +1,16 @@
 ﻿using EnterpriseAIAssistant.Application.DTOs;
 using EnterpriseAIAssistant.Application.Interfaces;
+using EnterpriseAIAssistant.Infrastructure.Configuration;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval;
 
 public sealed class KnowledgeRetrieverFailureTests
 {
-    private static InMemoryVectorStore CreateStore() =>
-        new(NullLogger<InMemoryVectorStore>.Instance);
+    private static InMemoryVectorStore CreateStore(double minimumSimilarityScore = 0.50) =>
+        new(NullLogger<InMemoryVectorStore>.Instance, Options.Create(new RetrievalOptions { MinimumSimilarityScore = minimumSimilarityScore }));
 
     [Fact]
     public async Task SearchAsync_EmbeddingFailure_PropagatesException()
@@ -18,7 +20,8 @@ public sealed class KnowledgeRetrieverFailureTests
 
         var retriever = new KnowledgeRetriever(
             embeddingService,
-            CreateStore());
+            CreateStore(),
+            Options.Create(new RetrievalOptions { TopK = 5 }));
 
         await Assert.ThrowsAsync<HttpRequestException>(
             () => retriever.SearchAsync("password reset"));
@@ -32,7 +35,8 @@ public sealed class KnowledgeRetrieverFailureTests
 
         var retriever = new KnowledgeRetriever(
             embeddingService,
-            new FailingSearchVectorStore());
+            new FailingSearchVectorStore(),
+            Options.Create(new RetrievalOptions { TopK = 5 }));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => retriever.SearchAsync("password reset"));

@@ -1,5 +1,6 @@
 ﻿using EnterpriseAIAssistant.Application.Interfaces;
 using EnterpriseAIAssistant.Infrastructure.AI;
+using EnterpriseAIAssistant.Infrastructure.Configuration;
 using EnterpriseAIAssistant.Infrastructure.Documents;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,8 +12,8 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.AI
     [Trait("Category", "Integration")]
     public sealed class ContextRelevanceDiagnosticTests
     {
-        private static InMemoryVectorStore CreateStore() =>
-            new(NullLogger<InMemoryVectorStore>.Instance);
+        private static InMemoryVectorStore CreateStore(double minimumSimilarityScore = 0.50) =>
+            new(NullLogger<InMemoryVectorStore>.Instance, Options.Create(new RetrievalOptions { MinimumSimilarityScore = minimumSimilarityScore }));
 
         [Fact]
         public async Task DiagnoseContextRelevance_WithRealOllama()
@@ -60,7 +61,8 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.AI
 
             IKnowledgeRetriever retriever = new KnowledgeRetriever(
                 embeddingService,
-                vectorStore);
+                vectorStore,
+                Options.Create(new RetrievalOptions { TopK = 5 }));
 
             // Load documents.
             var loadedChunks =

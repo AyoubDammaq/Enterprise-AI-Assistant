@@ -25,7 +25,7 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
             _retrieverMock
                 .Setup(x => x.SearchAsync(
                     It.IsAny<string>(),
-                    It.IsAny<int>(),
+                    It.IsAny<int?>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(Array.Empty<RetrievedChunk>());
 
@@ -90,7 +90,7 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
             _retrieverMock
                 .Setup(x => x.SearchAsync(
                     question,
-                    It.IsAny<int>(),
+                    It.IsAny<int?>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(retrievedChunks);
 
@@ -171,7 +171,7 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
             _retrieverMock
                 .Setup(x => x.SearchAsync(
                     question,
-                    It.IsAny<int>(),
+                    It.IsAny<int?>(),
                     cancellationToken))
                 .ReturnsAsync(retrievedChunks);
 
@@ -204,7 +204,7 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
             _retrieverMock.Verify(
                 x => x.SearchAsync(
                     question,
-                    It.IsAny<int>(),
+                    It.IsAny<int?>(),
                     cancellationToken),
                 Times.Once);
 
@@ -245,7 +245,7 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
             _retrieverMock.Verify(
                 x => x.SearchAsync(
                     It.IsAny<string>(),
-                    It.IsAny<int>(),
+                    It.IsAny<int?>(),
                     It.IsAny<CancellationToken>()),
                 Times.Never);
         }
@@ -257,7 +257,7 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
             _retrieverMock
                 .Setup(x => x.SearchAsync(
                     It.IsAny<string>(),
-                    It.IsAny<int>(),
+                    It.IsAny<int?>(),
                     It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new HttpRequestException("Embedding failed."));
 
@@ -298,7 +298,7 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
             _retrieverMock
                 .Setup(x => x.SearchAsync(
                     It.IsAny<string>(),
-                    It.IsAny<int>(),
+                    It.IsAny<int?>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(retrievedChunks);
 
@@ -347,7 +347,7 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
             _retrieverMock
                 .Setup(x => x.SearchAsync(
                     It.IsAny<string>(),
-                    It.IsAny<int>(),
+                    It.IsAny<int?>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(retrievedChunks);
 

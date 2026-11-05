@@ -1,9 +1,9 @@
-﻿using EnterpriseAIAssistant.Application.Auth;
-using EnterpriseAIAssistant.Application.Interfaces;
+﻿using EnterpriseAIAssistant.Application.Interfaces;
 using EnterpriseAIAssistant.Infrastructure.AI;
 using EnterpriseAIAssistant.Infrastructure.Documents;
 using EnterpriseAIAssistant.Infrastructure.Identity;
 using EnterpriseAIAssistant.Infrastructure.Memory;
+using EnterpriseAIAssistant.Infrastructure.Configuration;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -56,6 +56,17 @@ namespace EnterpriseAIAssistant.Infrastructure.Extensions
 
             services.Configure<DocumentLoadingOptions>(
                 configuration.GetSection(DocumentLoadingOptions.SectionName));
+
+            services.AddOptions<RetrievalOptions>()
+                .Bind(configuration.GetSection(RetrievalOptions.SectionName))
+                .Validate(
+                    options => options.TopK is >= 1 and <= InMemoryVectorStore.MaximumTopK,
+                    $"TopK must be between 1 and {InMemoryVectorStore.MaximumTopK}.")
+                .Validate(
+                    options => double.IsFinite(options.MinimumSimilarityScore)
+                               && options.MinimumSimilarityScore is >= 0.0 and <= 1.0,
+                    "MinimumSimilarityScore must be between 0.0 and 1.0.")
+                .ValidateOnStart();
 
             // RAG Day 5: Ollama embeddings and in-memory vector retrieval.
             services.Configure<OllamaEmbeddingOptions>(

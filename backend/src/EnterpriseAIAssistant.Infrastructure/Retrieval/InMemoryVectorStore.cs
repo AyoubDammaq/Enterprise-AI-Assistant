@@ -1,6 +1,9 @@
 using EnterpriseAIAssistant.Application.DTOs;
 using EnterpriseAIAssistant.Application.Interfaces;
+using EnterpriseAIAssistant.Infrastructure.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using System.Diagnostics;
 
 namespace EnterpriseAIAssistant.Infrastructure.Retrieval;
 
@@ -8,14 +11,14 @@ namespace EnterpriseAIAssistant.Infrastructure.Retrieval;
 /// Process-local vector store. Data is lost when the application stops.
 /// The lock protects mutations and snapshots because the service is registered as a singleton.
 /// </summary>
-public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger) : IVectorStore
+public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger, IOptions<RetrievalOptions> retrievalOptions) : IVectorStore
 {
     public const int MaximumTopK = 20;
-    public const double MinimumSimilarityScore = 0.50;
     private readonly object _gate = new();
     private readonly Dictionary<(string DocumentId, int ChunkIndex), EmbeddedChunk> _chunks = new();
     private int? _vectorDimensions;
     private readonly ILogger<InMemoryVectorStore> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly RetrievalOptions _retrievalOptions = retrievalOptions?.Value ?? throw new ArgumentNullException(nameof(retrievalOptions));
 
     public Task UpsertAsync(
         IReadOnlyCollection<EmbeddedChunk> chunks,
@@ -44,8 +47,14 @@ public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger) : I
             ValidateVector(item.Embedding, nameof(chunks));
 
             batchDimensions ??= item.Embedding.Count;
+
             if (item.Embedding.Count != batchDimensions.Value)
             {
+                _logger.LogWarning(
+                    "[RAG] Invalid embedding dimensions in batch. Expected={Expected}, Received={Received}",
+                    batchDimensions.Value,
+                    item.Embedding.Count);
+
                 throw new ArgumentException(
                     "All vectors in a batch must have the same dimensions.", nameof(chunks));
             }
@@ -58,6 +67,11 @@ public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger) : I
         {
             if (_vectorDimensions.HasValue && _vectorDimensions.Value != batchDimensions!.Value)
             {
+                _logger.LogWarning(
+                    "[RAG] Vector dimension mismatch during upsert. Expected={Expected}, Received={Received}",
+                    _vectorDimensions.Value,
+                    batchDimensions.Value);
+
                 throw new ArgumentException(
                     $"Vector dimension mismatch. Store expects {_vectorDimensions.Value}, " +
                     $"received {batchDimensions.Value}.", nameof(chunks));
@@ -71,6 +85,11 @@ public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger) : I
             }
 
             _vectorDimensions ??= batchDimensions;
+
+            _logger.LogInformation(
+                "[RAG] Indexed {ChunkCount} chunks. VectorDimensions={Dimensions}",
+                prepared.Count,
+                _vectorDimensions);
         }
 
         return Task.CompletedTask;
@@ -86,17 +105,28 @@ public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger) : I
         ValidateVector(queryEmbedding, nameof(queryEmbedding));
         cancellationToken.ThrowIfCancellationRequested();
 
+        var stopwatch = Stopwatch.StartNew();
+
         List<EmbeddedChunk> snapshot;
         lock (_gate)
         {
             if (_chunks.Count == 0)
             {
+                _logger.LogInformation(
+                    "[RAG] Search completed. No chunks indexed. TopK={TopK}",
+                    topK);
+
                 return Task.FromResult<IReadOnlyList<RetrievedChunk>>(
                     Array.Empty<RetrievedChunk>());
             }
 
             if (_vectorDimensions != queryEmbedding.Count)
             {
+                _logger.LogWarning(
+                    "[RAG] Query vector dimension mismatch. Expected={Expected}, Received={Received}",
+                    _vectorDimensions,
+                    queryEmbedding.Count);
+
                 throw new ArgumentException(
                     $"Query vector dimension mismatch. Store expects {_vectorDimensions}, " +
                     $"received {queryEmbedding.Count}.", nameof(queryEmbedding));
@@ -119,12 +149,24 @@ public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger) : I
         }
 
         IReadOnlyList<RetrievedChunk> result = ranked
-            .Where(item => item.SimilarityScore >= MinimumSimilarityScore)
+            .Where(item => item.SimilarityScore >= _retrievalOptions.MinimumSimilarityScore)
             .OrderByDescending(item => item.SimilarityScore)
             .ThenBy(item => item.Chunk.Source, StringComparer.Ordinal)
             .ThenBy(item => item.Chunk.ChunkIndex)
             .Take(topK)
             .ToArray();
+
+        stopwatch.Stop();
+
+        _logger.LogInformation(
+            "[RAG] Search completed. IndexedChunks={IndexedChunks}, " +
+            "ReturnedResults={ReturnedResults}, TopK={TopK}, " +
+            "MinimumSimilarityScore={MinimumSimilarityScore}, DurationMs={DurationMs}",
+            snapshot.Count,
+            result.Count,
+            topK,
+            _retrievalOptions.MinimumSimilarityScore,
+            stopwatch.ElapsedMilliseconds);
 
         return Task.FromResult(result);
     }
