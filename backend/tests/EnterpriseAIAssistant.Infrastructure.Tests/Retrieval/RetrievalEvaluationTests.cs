@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval;
 
+[Trait("Category", "Unit")]
 public sealed class RetrievalEvaluationTests
 {
     private static InMemoryVectorStore CreateStore(double minimumSimilarityScore = 0.50) =>
@@ -22,8 +23,8 @@ public sealed class RetrievalEvaluationTests
 
         await store.UpsertAsync(
         [
-            Embedded("products.txt", "Product information", [0.8f, 0.6f]),
-            Embedded("company-info.md", "Company architecture", [1f, 0f])
+            Embedded("product-catalog.md", "Product information", [0.8f, 0.6f]),
+            Embedded("architecture-guide.md", "Company architecture", [1f, 0f])
         ]);
 
         var retriever = new KnowledgeRetriever(embeddings, store, Options.Create(new RetrievalOptions { TopK = 5 }));
@@ -35,7 +36,7 @@ public sealed class RetrievalEvaluationTests
 
         // Assert
         Assert.Equal(2, results.Count);
-        Assert.Equal("company-info.md", results[0].Chunk.Source);
+        Assert.Equal("architecture-guide.md", results[0].Chunk.Source);
         Assert.True(
             results[0].SimilarityScore > results[1].SimilarityScore);
         Assert.Equal(1, embeddings.Calls);
@@ -51,8 +52,8 @@ public sealed class RetrievalEvaluationTests
 
         await store.UpsertAsync(
         [
-            Embedded("company-info.md", "Company information", [1f, 0f]),
-            Embedded("products.txt", "Product information", [0.8f, 0.6f])
+            Embedded("architecture-guide.md", "Company information", [1f, 0f]),
+            Embedded("product-catalog.md", "Product information", [0.8f, 0.6f])
         ]);
 
         var retriever = new KnowledgeRetriever(embeddings, store, Options.Create(new RetrievalOptions { TopK = 5 }));
@@ -61,7 +62,7 @@ public sealed class RetrievalEvaluationTests
         var results = await retriever.SearchAsync("Product information", topK: 2);
 
         var sample = new RetrievalEvaluationSample(
-            "products.txt",
+            "product-catalog.md",
             results.Select(result => result.Chunk.Source).ToList());
 
         var hitRateAtOne = RetrievalMetrics.CalculateHitRateAtK(
@@ -73,7 +74,7 @@ public sealed class RetrievalEvaluationTests
         // Assert
         Assert.Equal(0d, hitRateAtOne);
         Assert.Equal(1d, hitRateAtTwo);
-        Assert.Equal("products.txt", results[1].Chunk.Source);
+        Assert.Equal("product-catalog.md", results[1].Chunk.Source);
     }
 
     [Fact]
@@ -114,8 +115,8 @@ public sealed class RetrievalEvaluationTests
 
         await store.UpsertAsync(
         [
-            Embedded("company-info.md", "Company information", [0f, 1f]),
-            Embedded("products.txt", "Product information", [-1f, 0f])
+            Embedded("architecture-guide.md", "Company information", [0f, 1f]),
+            Embedded("product-catalog.md", "Product information", [-1f, 0f])
         ]);
 
         var retriever = new KnowledgeRetriever(embeddings, store, Options.Create(new RetrievalOptions { TopK = 5 }));
@@ -161,3 +162,4 @@ public sealed class RetrievalEvaluationTests
         }
     }
 }
+
