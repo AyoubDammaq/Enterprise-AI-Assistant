@@ -112,48 +112,52 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.AI
 
             // Use the actual context relevance evaluator.
             IContextRelevanceEvaluator evaluator =
-                new SemanticKernelContextRelevanceEvaluator(kernel);
+                new SemanticKernelContextRelevanceEvaluator(
+                    kernel,
+                    NullLogger<SemanticKernelContextRelevanceEvaluator>.Instance);
 
             // Positive questions must have sufficient context.
             // Negative questions must be rejected.
+
             var testCases = new[]
             {
                 (
                     Id: "Q1",
-                    Question: "How can I reset my password?",
+                    Question: "How can a user reset their Demo Portal password?",
                     ExpectedSufficient: true
                 ),
                 (
                     Id: "Q2",
-                    Question: "After how many failed attempts is an account locked, and when is it unlocked?",
+                    Question: "How long is a Demo Portal account locked after failed login attempts?",
                     ExpectedSufficient: true
                 ),
                 (
                     Id: "Q3",
-                    Question: "What is the low stock threshold?",
+                    Question: "What is the default low-stock threshold in Atlas Inventory?",
                     ExpectedSufficient: true
                 ),
                 (
                     Id: "Q4",
-                    Question: "What role and permissions does the Administrator have?",
+                    Question: "Which user role can modify inventory settings and manage users?",
                     ExpectedSufficient: true
                 ),
                 (
                     Id: "Q5",
-                    Question: "How can I resolve error INV-001?",
+                    Question: "How should a user resolve error INV-001?",
                     ExpectedSufficient: true
                 ),
                 (
                     Id: "Q6",
-                    Question: "What is the monthly price?",
+                    Question: "What is the monthly subscription price of Atlas Inventory?",
                     ExpectedSufficient: false
                 ),
                 (
                     Id: "Q7",
-                    Question: "Which database engine is used in production?",
+                    Question: "Which database engine does Atlas Inventory use in production?",
                     ExpectedSufficient: false
                 )
             };
+
 
             var truePositives = 0;
             var falsePositives = 0;

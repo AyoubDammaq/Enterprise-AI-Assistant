@@ -81,16 +81,6 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
-
-// Add Gemini configuration 
-var modelId = builder.Configuration["Gemini:ModelId"] 
-    ?? throw new InvalidOperationException(
-        "Gemini:ModelId is not configured.");
-
-var apiKey = builder.Configuration["Gemini:ApiKey"] 
-    ?? throw new InvalidOperationException(
-        "Gemini:ApiKey is not configured.");
-
 // Add Ollama configuration
 var ollamaEndpoint =
     builder.Configuration["Ollama:Endpoint"]
