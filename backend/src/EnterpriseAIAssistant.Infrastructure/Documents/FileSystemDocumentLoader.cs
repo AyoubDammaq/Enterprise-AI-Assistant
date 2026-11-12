@@ -24,8 +24,12 @@ public sealed class FileSystemDocumentLoader : IDocumentLoader
         ValidateOptions(_options);
 
         _chunker = new TextChunker(
-            _options.ChunkSize,
-            _options.ChunkOverlap);
+            new ChunkingOptions
+            {
+                Strategy = _options.Strategy,
+                ChunkSize = _options.ChunkSize,
+                ChunkOverlap = _options.ChunkOverlap
+            });
     }
 
     public async Task<IReadOnlyList<DocumentChunk>> LoadAsync(
@@ -62,7 +66,6 @@ public sealed class FileSystemDocumentLoader : IDocumentLoader
             fullPath);
     }
 
-
     private async Task<IReadOnlyList<DocumentChunk>> LoadDirectoryAsync(
         string directoryPath,
         CancellationToken cancellationToken)
@@ -70,9 +73,15 @@ public sealed class FileSystemDocumentLoader : IDocumentLoader
         var chunks = new List<DocumentChunk>();
 
         var files = Directory
-            .EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories)
-            .Where(file => SupportedExtensions.Contains(Path.GetExtension(file)))
-            .OrderBy(file => file, StringComparer.OrdinalIgnoreCase);
+            .EnumerateFiles(
+                directoryPath,
+                "*",
+                SearchOption.AllDirectories)
+            .Where(file =>
+                SupportedExtensions.Contains(Path.GetExtension(file)))
+            .OrderBy(
+                file => file,
+                StringComparer.OrdinalIgnoreCase);
 
         foreach (var file in files)
         {
@@ -89,8 +98,6 @@ public sealed class FileSystemDocumentLoader : IDocumentLoader
         return chunks;
     }
 
-
-
     private async Task<IReadOnlyList<DocumentChunk>> LoadFileAsync(
         string filePath,
         string rootDirectory,
@@ -100,7 +107,10 @@ public sealed class FileSystemDocumentLoader : IDocumentLoader
             filePath,
             cancellationToken);
 
-        var source = Path.GetRelativePath(rootDirectory, filePath);
+        var source = Path.GetRelativePath(
+            rootDirectory,
+            filePath);
+
         var documentId = source;
 
         return _chunker.Chunk(
@@ -108,7 +118,6 @@ public sealed class FileSystemDocumentLoader : IDocumentLoader
             source,
             content);
     }
-
 
     private static void EnsureSupportedExtension(string filePath)
     {
@@ -139,6 +148,13 @@ public sealed class FileSystemDocumentLoader : IDocumentLoader
             throw new ArgumentOutOfRangeException(
                 nameof(options.ChunkOverlap),
                 "Chunk overlap must be non-negative and smaller than chunk size.");
+        }
+
+        if (!Enum.IsDefined(options.Strategy))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options.Strategy),
+                "Unknown chunking strategy.");
         }
     }
 }

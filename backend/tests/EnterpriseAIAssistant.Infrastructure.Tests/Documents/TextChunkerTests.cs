@@ -183,6 +183,108 @@ public sealed class TextChunkerTests
             () => chunker.Chunk(null!, "sample.txt", "content"));
     }
 
+    [Fact]
+    public void Chunk_FixedSize_RespectsConfiguredChunkSize()
+    {
+        var chunker = new TextChunker(new ChunkingOptions
+        {
+            Strategy = ChunkingStrategy.FixedSize,
+            ChunkSize = 20,
+            ChunkOverlap = 5
+        });
+
+        var result = chunker.Chunk(
+            "doc-1",
+            "sample.txt",
+            new string('a', 45));
+
+        Assert.Equal(3, result.Count);
+
+        Assert.All(result, chunk =>
+            Assert.True(chunk.Content.Length <= 20));
+
+        Assert.Equal(
+            result[0].Content[^5..],
+            result[1].Content[..5]);
+    }
+
+    [Fact]
+    public void Chunk_ParagraphAware_PreservesParagraphBoundariesWhenPossible()
+    {
+        var chunker = new TextChunker(new ChunkingOptions
+        {
+            Strategy = ChunkingStrategy.ParagraphAware,
+            ChunkSize = 40,
+            ChunkOverlap = 5
+        });
+
+        var result = chunker.Chunk(
+            "doc-1",
+            "sample.md",
+            "First paragraph.\n\nSecond paragraph.");
+
+        var chunk = Assert.Single(result);
+
+        Assert.Equal(
+            "First paragraph.\n\nSecond paragraph.",
+            chunk.Content);
+    }
+
+    [Fact]
+    public void Chunk_RecursiveCharacter_PreservesParagraphSeparatorsWhenPossible()
+    {
+        var chunker = new TextChunker(new ChunkingOptions
+        {
+            Strategy = ChunkingStrategy.RecursiveCharacter,
+            ChunkSize = 50,
+            ChunkOverlap = 0
+        });
+
+        var result = chunker.Chunk(
+            "doc-1",
+            "sample.md",
+            "First paragraph.\n\nSecond paragraph.");
+
+        var chunk = Assert.Single(result);
+
+        Assert.Equal(
+            "First paragraph.\n\nSecond paragraph.",
+            chunk.Content);
+    }
+
+    [Theory]
+    [InlineData(ChunkingStrategy.FixedSize)]
+    [InlineData(ChunkingStrategy.ParagraphAware)]
+    [InlineData(ChunkingStrategy.RecursiveCharacter)]
+    public void Chunk_AllStrategies_PreserveMetadataAndSequentialIndexes(
+    ChunkingStrategy strategy)
+    {
+        var chunker = new TextChunker(new ChunkingOptions
+        {
+            Strategy = strategy,
+            ChunkSize = 20,
+            ChunkOverlap = 5
+        });
+
+        var result = chunker.Chunk(
+            "doc-1",
+            "sample.md",
+            new string('a', 60));
+
+        Assert.NotEmpty(result);
+
+        Assert.All(result, chunk =>
+        {
+            Assert.Equal("doc-1", chunk.DocumentId);
+            Assert.Equal("sample.md", chunk.Source);
+            Assert.True(chunk.Content.Length <= 20);
+        });
+
+        Assert.Equal(
+            Enumerable.Range(0, result.Count),
+            result.Select(chunk => chunk.ChunkIndex));
+    }
+
     [Theory]
     [InlineData(0, 0)]
     [InlineData(-1, 0)]

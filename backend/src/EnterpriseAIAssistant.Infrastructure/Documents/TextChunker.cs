@@ -1,32 +1,73 @@
 ﻿using EnterpriseAIAssistant.Application.DTOs;
+using EnterpriseAIAssistant.Infrastructure.Documents.Strategies;
 
 namespace EnterpriseAIAssistant.Infrastructure.Documents;
 
 /// <summary>
-/// Splits document text into chunks while preserving paragraph boundaries when possible.
+/// Facade responsible for selecting a chunking strategy
+/// and converting its output into DocumentChunk objects.
 /// </summary>
 public sealed class TextChunker
 {
     private readonly int _chunkSize;
     private readonly int _chunkOverlap;
+    private readonly IChunkingStrategy _strategy;
 
-    public TextChunker(int chunkSize = 800, int chunkOverlap = 100)
+    public TextChunker(
+        int chunkSize = 800,
+        int chunkOverlap = 100)
+        : this(new ChunkingOptions
+        {
+            ChunkSize = chunkSize,
+            ChunkOverlap = chunkOverlap,
+            Strategy = ChunkingStrategy.ParagraphAware
+        })
     {
-        if (chunkSize <= 0)
+    }
+
+    public TextChunker(ChunkingOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (options.ChunkSize <= 0)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(chunkSize), "Chunk size must be greater than zero.");
+                nameof(options.ChunkSize),
+                "Chunk size must be greater than zero.");
         }
 
-        if (chunkOverlap < 0 || chunkOverlap >= chunkSize)
+        if (options.ChunkOverlap < 0 ||
+            options.ChunkOverlap >= options.ChunkSize)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(chunkOverlap),
+                nameof(options.ChunkOverlap),
                 "Chunk overlap must be non-negative and smaller than chunk size.");
         }
 
-        _chunkSize = chunkSize;
-        _chunkOverlap = chunkOverlap;
+        if (!Enum.IsDefined(options.Strategy))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options.Strategy),
+                "Unknown chunking strategy.");
+        }
+
+        _chunkSize = options.ChunkSize;
+        _chunkOverlap = options.ChunkOverlap;
+
+        _strategy = options.Strategy switch
+        {
+            ChunkingStrategy.FixedSize =>
+                new FixedSizeChunkingStrategy(),
+
+            ChunkingStrategy.ParagraphAware =>
+                new ParagraphAwareChunkingStrategy(),
+
+            ChunkingStrategy.RecursiveCharacter =>
+                new RecursiveCharacterChunkingStrategy(),
+
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(options.Strategy))
+        };
     }
 
     public IReadOnlyList<DocumentChunk> Chunk(
@@ -43,131 +84,18 @@ public sealed class TextChunker
             return Array.Empty<DocumentChunk>();
         }
 
-        var paragraphs = content
-            .Split(
-                new[] { "\r\n\r\n", "\n\n", "\r\r" },
-                StringSplitOptions.None)
-            .Select(paragraph => paragraph.Trim())
-            .Where(paragraph => paragraph.Length > 0)
+        var chunkContents = _strategy.Split(
+            content,
+            _chunkSize,
+            _chunkOverlap);
+
+        return chunkContents
+            .Select((chunkContent, index) =>
+                new DocumentChunk(
+                    documentId,
+                    source,
+                    index,
+                    chunkContent))
             .ToList();
-
-        var chunks = new List<DocumentChunk>();
-        var current = new System.Text.StringBuilder();
-
-        foreach (var paragraph in paragraphs)
-        {
-            if (paragraph.Length > _chunkSize)
-            {
-                FlushCurrentChunk(chunks, current, documentId, source);
-
-                AddLongParagraphChunks(
-                    chunks, paragraph, documentId, source);
-
-                continue;
-            }
-
-            var requiredLength = current.Length == 0
-                ? paragraph.Length
-                : current.Length + 2 + paragraph.Length;
-
-            if (requiredLength <= _chunkSize)
-            {
-                if (current.Length > 0)
-                {
-                    current.Append("\n\n");
-                }
-
-                current.Append(paragraph);
-                continue;
-            }
-
-            FlushCurrentChunk(chunks, current, documentId, source);
-
-            AppendWithOverlap(current, paragraph);
-        }
-
-        FlushCurrentChunk(chunks, current, documentId, source);
-
-        return chunks;
-    }
-
-    private void AddLongParagraphChunks(
-        ICollection<DocumentChunk> chunks,
-        string paragraph,
-        string documentId,
-        string source)
-    {
-        var start = 0;
-
-        while (start < paragraph.Length)
-        {
-            var length = Math.Min(_chunkSize, paragraph.Length - start);
-            var piece = paragraph.Substring(start, length);
-
-            chunks.Add(new DocumentChunk(
-                documentId,
-                source,
-                chunks.Count,
-                piece));
-
-            if (start + length >= paragraph.Length)
-            {
-                break;
-            }
-
-            start += _chunkSize - _chunkOverlap;
-        }
-    }
-
-    private void FlushCurrentChunk(
-        ICollection<DocumentChunk> chunks,
-        System.Text.StringBuilder current,
-        string documentId,
-        string source)
-    {
-        if (current.Length == 0)
-        {
-            return;
-        }
-
-        chunks.Add(new DocumentChunk(
-            documentId,
-            source,
-            chunks.Count,
-            current.ToString()));
-
-        current.Clear();
-    }
-
-    private void AppendWithOverlap(
-        System.Text.StringBuilder current,
-        string paragraph)
-    {
-        var overlapLength = Math.Min(_chunkOverlap, current.Length);
-        var overlap = overlapLength > 0
-            ? current.ToString(current.Length - overlapLength, overlapLength)
-            : string.Empty;
-
-        current.Clear();
-
-        if (overlap.Length > 0)
-        {
-            current.Append(overlap);
-        }
-
-        if (current.Length > 0 && paragraph.Length > 0)
-        {
-            current.Append("\n\n");
-        }
-
-        current.Append(paragraph);
-
-        // A paragraph can fit by itself, but not with the overlap.
-        // Keep the chunk within the configured maximum size.
-        if (current.Length > _chunkSize)
-        {
-            current.Clear();
-            current.Append(paragraph);
-        }
     }
 }

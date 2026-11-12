@@ -9,4 +9,7 @@ public sealed class DocumentLoadingOptions
     public int ChunkSize { get; set; } = 800;
 
     public int ChunkOverlap { get; set; } = 100;
+
+    public ChunkingStrategy Strategy { get; set; }
+        = ChunkingStrategy.ParagraphAware;
 }

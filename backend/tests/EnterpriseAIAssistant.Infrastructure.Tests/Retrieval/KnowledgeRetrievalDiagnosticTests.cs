@@ -348,6 +348,374 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
 
             _logger.LogInformation("============================================================");
         }
+
+
+        [Fact]
+        public async Task DiagnoseChunkingStrategies_WithSameCorpus()
+        {
+            // Arrange: load the same knowledge corpus for every strategy.
+            var documentsPath =
+                Environment.GetEnvironmentVariable("RAG_DOCUMENTS_PATH");
+
+            Assert.False(
+                string.IsNullOrWhiteSpace(documentsPath),
+                "Set the RAG_DOCUMENTS_PATH environment variable.");
+
+            Assert.True(
+                Directory.Exists(documentsPath),
+                $"Documents directory not found: {documentsPath}");
+
+            var expectedFiles = new[]
+            {
+                "support-faq.md",
+                "product-guide.md",
+                "troubleshooting.md"
+            };
+
+            _logger.LogInformation(
+                "========== CHUNKING STRATEGIES COMPARISON ==========");
+
+            _logger.LogInformation("Documents path: {DocumentsPath}", documentsPath);
+            _logger.LogInformation("Chunk size: 800");
+            _logger.LogInformation("Chunk overlap: 100");
+
+            _logger.LogInformation(
+                "{Strategy,-22} | {Count,8} | {Min,8} | {Average,10} | {Max,8}",
+                "Strategy",
+                "Chunks",
+                "Min",
+                "Average",
+                "Max");
+
+            _logger.LogInformation(
+                new string('-', 75));
+
+            // Act: evaluate each strategy using identical input documents.
+            foreach (var strategy in Enum.GetValues<ChunkingStrategy>())
+            {
+                var documentLoader = new FileSystemDocumentLoader(
+                    Options.Create(new DocumentLoadingOptions
+                    {
+                        RootDirectory = documentsPath!,
+                        Strategy = strategy,
+                        ChunkSize = 800,
+                        ChunkOverlap = 100
+                    }));
+
+                var chunks = (await documentLoader.LoadAsync(documentsPath!))
+                    .ToList();
+
+                // Ensure that the same three knowledge documents are loaded.
+                Assert.NotEmpty(chunks);
+
+                var loadedSources = chunks
+                    .Select(chunk => Path.GetFileName(chunk.Source))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                Assert.Equal(expectedFiles.Length, loadedSources.Count);
+
+                foreach (var expectedFile in expectedFiles)
+                {
+                    Assert.Contains(
+                        loadedSources,
+                        source => string.Equals(
+                            source,
+                            expectedFile,
+                            StringComparison.OrdinalIgnoreCase));
+                }
+
+                // Calculate chunking statistics.
+                var statistics = ChunkingStatisticsCalculator.Calculate(chunks);
+
+                // Log results.
+                _logger.LogInformation(
+                    "{Strategy,-22} | {Count,8} | {Min,8} | {Average,10:F2} | {Max,8}",
+                    strategy,
+                    statistics.ChunkCount,
+                    statistics.MinLength,
+                    statistics.AverageLength,
+                    statistics.MaxLength);
+
+                Assert.Equal(chunks.Count, statistics.ChunkCount);
+            }
+
+            _logger.LogInformation(
+                "=====================================================");
+        }
+
+        [Fact]
+        public async Task DiagnoseRetrievalAcrossChunkingStrategies()
+        {
+            // 1. Validate the evaluation corpus.
+            var documentsPath =
+                Environment.GetEnvironmentVariable("RAG_DOCUMENTS_PATH");
+
+            Assert.False(
+                string.IsNullOrWhiteSpace(documentsPath),
+                "Set the RAG_DOCUMENTS_PATH environment variable.");
+
+            Assert.True(
+                Directory.Exists(documentsPath),
+                $"Documents directory not found: {documentsPath}");
+
+            // 2. Keep the same questions for every strategy.
+            var testCases = new[]
+            {
+                (
+                    Id: "Q1",
+                    Question: "How can I reset my Demo Portal password?",
+                    ExpectedSource: (string?)"support-faq.md"
+                ),
+                (
+                    Id: "Q2",
+                    Question: "How long does an account remain locked after too many failed login attempts?",
+                    ExpectedSource: (string?)"support-faq.md"
+                ),
+                (
+                    Id: "Q3",
+                    Question: "What is the default low-stock threshold?",
+                    ExpectedSource: (string?)"product-guide.md"
+                ),
+                (
+                    Id: "Q4",
+                    Question: "Which role can modify inventory settings and manage users?",
+                    ExpectedSource: (string?)"product-guide.md"
+                ),
+                (
+                    Id: "Q5",
+                    Question: "How can I resolve error INV-001?",
+                    ExpectedSource: (string?)"troubleshooting.md"
+                ),
+                (
+                    Id: "Q6",
+                    Question: "What is the monthly subscription price?",
+                    ExpectedSource: (string?)null
+                ),
+                (
+                    Id: "Q7",
+                    Question: "Which database engine is used in production?",
+                    ExpectedSource: (string?)null
+                )
+            };
+
+            const int chunkSize = 800;
+            const int chunkOverlap = 100;
+            const int topK = 5;
+            const double minimumSimilarityScore = 0.50;
+
+            // 3. Reuse the same embedding model and HTTP client.
+            using var httpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(60)
+            };
+
+            IEmbeddingService embeddingService =
+                new OllamaEmbeddingService(
+                    httpClient,
+                    Options.Create(new OllamaEmbeddingOptions
+                    {
+                        Endpoint = "http://localhost:11434",
+                        EmbeddingModel = "nomic-embed-text",
+                        EmbeddingDimensions = 768
+                    }));
+
+            var reports = new List<(
+                ChunkingStrategy Strategy,
+                int ChunkCount,
+                double HitRateAt1,
+                double HitRateAt2,
+                double Mrr,
+                int NegativeQueriesWithResults)>();
+
+            _logger.LogInformation(
+                "========== RETRIEVAL STRATEGIES COMPARISON ==========");
+
+            foreach (var strategy in Enum.GetValues<ChunkingStrategy>())
+            {
+                _logger.LogInformation(
+                    "Evaluating strategy: {Strategy}", strategy);
+
+                // 4. Load documents using the current strategy.
+                var documentLoader = new FileSystemDocumentLoader(
+                    Options.Create(new DocumentLoadingOptions
+                    {
+                        RootDirectory = documentsPath!,
+                        Strategy = strategy,
+                        ChunkSize = chunkSize,
+                        ChunkOverlap = chunkOverlap
+                    }));
+
+                var loadedChunks =
+                    await documentLoader.LoadAsync(documentsPath!);
+
+                Assert.NotEmpty(loadedChunks);
+
+                // Exclude evaluation questions from the knowledge index.
+                var knowledgeChunks = loadedChunks
+                    .Where(chunk =>
+                        !string.Equals(
+                            Path.GetFileName(chunk.Source),
+                            "evaluation-questions.md",
+                            StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                Assert.NotEmpty(knowledgeChunks);
+
+                // 5. Create a completely independent vector store.
+                IVectorStore vectorStore = CreateStore(
+                    minimumSimilarityScore);
+
+                IKnowledgeIndexer indexer = new KnowledgeIndexer(
+                    embeddingService,
+                    vectorStore);
+
+                IKnowledgeRetriever retriever = new KnowledgeRetriever(
+                    embeddingService,
+                    vectorStore,
+                    Options.Create(new RetrievalOptions
+                    {
+                        TopK = topK
+                    }));
+
+                // 6. Index chunks generated by this strategy only.
+                var indexedCount = await indexer.IndexAsync(
+                    knowledgeChunks);
+
+                Assert.Equal(knowledgeChunks.Count, indexedCount);
+
+                _logger.LogInformation(
+                    "Strategy={Strategy}, IndexedChunks={ChunkCount}",
+                    strategy,
+                    indexedCount);
+
+                var evaluationSamples =
+                    new List<RetrievalEvaluationSample>();
+
+                var negativeQueriesWithResults = 0;
+
+                // 7. Execute exactly the same evaluation questions.
+                foreach (var testCase in testCases)
+                {
+                    var results = await retriever.SearchAsync(
+                        testCase.Question,
+                        topK: topK);
+
+                    var retrievedSources = results
+                        .Select(result =>
+                            Path.GetFileName(result.Chunk.Source))
+                        .ToList();
+
+                    _logger.LogInformation(
+                        "{QuestionId} | Results={ResultCount}",
+                        testCase.Id,
+                        results.Count);
+
+
+                    foreach (var result in results)
+                    {
+                        _logger.LogInformation(
+                            "Source={Source}, Chunk={ChunkIndex}, Score={Score:F4}",
+                            Path.GetFileName(result.Chunk.Source),
+                            result.Chunk.ChunkIndex,
+                            result.SimilarityScore);
+
+                        // TEMPORARY: Display complete Q7 chunks for ParagraphAware.
+                        if (strategy == ChunkingStrategy.RecursiveCharacter &&
+                            testCase.Id == "Q7")
+                        {
+                            _logger.LogInformation(
+                                """
+                                ===== Q7 RETRIEVED CHUNK =====
+                                Strategy: {Strategy}
+                                Source: {Source}
+                                ChunkIndex: {ChunkIndex}
+                                Similarity: {Score:F4}
+                                Content:
+                                {Content}
+                                =============================
+                                """,
+                                strategy,
+                                Path.GetFileName(result.Chunk.Source),
+                                result.Chunk.ChunkIndex,
+                                result.SimilarityScore,
+                                result.Chunk.Content);
+                        }
+                    }
+
+
+                    if (testCase.ExpectedSource is not null)
+                    {
+                        evaluationSamples.Add(
+                            new RetrievalEvaluationSample(
+                                testCase.ExpectedSource,
+                                retrievedSources));
+                    }
+                    else if (results.Count > 0)
+                    {
+                        // This is not automatically a false positive.
+                        // Retrieved chunks still require relevance review.
+                        negativeQueriesWithResults++;
+                    }
+                }
+
+                // 8. Calculate metrics for positive queries only.
+                Assert.NotEmpty(evaluationSamples);
+
+                var hitRateAt1 =
+                    RetrievalMetrics.CalculateHitRateAtK(
+                        evaluationSamples,
+                        k: 1);
+
+                var hitRateAt2 =
+                    RetrievalMetrics.CalculateHitRateAtK(
+                        evaluationSamples,
+                        k: 2);
+
+                var mrr =
+                    RetrievalMetrics.CalculateMeanReciprocalRank(
+                        evaluationSamples);
+
+                reports.Add((
+                    strategy,
+                    indexedCount,
+                    hitRateAt1,
+                    hitRateAt2,
+                    mrr,
+                    negativeQueriesWithResults));
+            }
+
+            // 9. Display the final comparison.
+            _logger.LogInformation("");
+            _logger.LogInformation(
+                "================ RETRIEVAL COMPARISON ================");
+
+            _logger.LogInformation(
+                "{Strategy,-22} | {Chunks,6} | {Hit1,8} | {Hit2,8} | {Mrr,8} | {Negative,8}",
+                "Strategy",
+                "Chunks",
+                "Hit@1",
+                "Hit@2",
+                "MRR",
+                "Neg.Results");
+
+            _logger.LogInformation(new string('-', 85));
+
+            foreach (var report in reports)
+            {
+                _logger.LogInformation(
+                    "{Strategy,-22} | {Chunks,6} | {Hit1,7:P1} | {Hit2,7:P1} | {Mrr,8:F4} | {Negative,8}",
+                    report.Strategy,
+                    report.ChunkCount,
+                    report.HitRateAt1,
+                    report.HitRateAt2,
+                    report.Mrr,
+                    report.NegativeQueriesWithResults);
+            }
+
+            _logger.LogInformation(
+                "=======================================================");
+        }
     }
 
     internal sealed class XunitLogger<T> : ILogger<T>
