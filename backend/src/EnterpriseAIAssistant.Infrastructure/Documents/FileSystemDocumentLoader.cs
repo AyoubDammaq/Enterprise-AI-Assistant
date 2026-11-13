@@ -81,7 +81,10 @@ public sealed class FileSystemDocumentLoader : IDocumentLoader
                 SupportedExtensions.Contains(Path.GetExtension(file)))
             .OrderBy(
                 file => file,
-                StringComparer.OrdinalIgnoreCase);
+                StringComparer.OrdinalIgnoreCase)
+            .ThenBy(
+                file => file,
+                StringComparer.Ordinal);
 
         foreach (var file in files)
         {

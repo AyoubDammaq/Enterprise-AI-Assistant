@@ -3,5 +3,7 @@
     public sealed record RagSource(
         string DocumentId,
         string DocumentName,
-        int ChunkIndex);
+        int ChunkIndex,
+        string ChunkId,
+        string? Section);
 }

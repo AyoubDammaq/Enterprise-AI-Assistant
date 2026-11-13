@@ -55,7 +55,9 @@ namespace EnterpriseAIAssistant.Application.Services
                 .Select(result => new RagSource(
                     result.Chunk.DocumentId,
                     result.Chunk.Source,
-                    result.Chunk.ChunkIndex))
+                    result.Chunk.ChunkIndex,
+                    result.Chunk.ChunkId,
+                    result.Chunk.Section))
                 .DistinctBy(source => new
                 {
                     source.DocumentId,

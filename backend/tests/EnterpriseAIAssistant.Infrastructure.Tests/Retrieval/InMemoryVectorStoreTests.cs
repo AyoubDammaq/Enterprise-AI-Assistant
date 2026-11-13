@@ -400,6 +400,45 @@ public sealed class InMemoryVectorStoreTests
         Assert.Equal("high-relevance.md", result.Chunk.Source);
     }
 
+
+    [Fact]
+    public async Task SearchAsync_PreservesChunkMetadata_AfterIndexingAndRetrieval()
+    {
+        // Arrange
+        var store = CreateStore();
+
+        var chunk = new DocumentChunk(
+            DocumentId: "support-faq",
+            Source: "support-faq.md",
+            ChunkIndex: 2,
+            Content: "How to reset a password?")
+        {
+            Section = "Account Management"
+        };
+
+        var embeddedChunk = new EmbeddedChunk(
+            chunk,
+            new float[] { 1f, 0f });
+
+        await store.UpsertAsync(new[] { embeddedChunk });
+
+        // Act
+        var results = await store.SearchAsync(
+            new float[] { 1f, 0f },
+            topK: 5);
+
+        // Assert
+        var result = Assert.Single(results);
+        var retrievedChunk = result.Chunk;
+
+        Assert.Equal("support-faq", retrievedChunk.DocumentId);
+        Assert.Equal("support-faq.md", retrievedChunk.Source);
+        Assert.Equal(2, retrievedChunk.ChunkIndex);
+        Assert.Equal("support-faq::chunk-0002", retrievedChunk.ChunkId);
+        Assert.Equal("Account Management", retrievedChunk.Section);
+        Assert.Equal("How to reset a password?", retrievedChunk.Content);
+    }
+
     private static EmbeddedChunk CreateEmbeddedChunk(
         string documentId,
         string source,

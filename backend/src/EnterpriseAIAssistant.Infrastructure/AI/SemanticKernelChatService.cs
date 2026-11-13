@@ -6,7 +6,6 @@ using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.Ollama;
 using System.Diagnostics;
-using System.Text;
 
 namespace EnterpriseAIAssistant.Infrastructure.AI
 {

@@ -70,13 +70,19 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
                 "password-guide",
                 "password-reset.md",
                 0,
-                "Open the sign-in page and select Forgot password.");
+                "Open the sign-in page and select Forgot password.")
+            {
+                Section = "Account Management"
+            };
 
             var chunk2 = new DocumentChunk(
                 "password-guide",
                 "password-reset.md",
                 1,
-                "A reset link will be sent to your email.");
+                "A reset link will be sent to your email.")
+            {
+                Section = "Password Recovery"
+            };
 
             var retrievedChunks = new[]
             {
@@ -126,12 +132,16 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
             Assert.Contains(result.Sources, source =>
                 source.DocumentId == "password-guide" &&
                 source.DocumentName == "password-reset.md" &&
-                source.ChunkIndex == 0);
+                source.ChunkIndex == 0 &&
+                source.ChunkId == "password-guide::chunk-0000" &&
+                source.Section == "Account Management");
 
             Assert.Contains(result.Sources, source =>
                 source.DocumentId == "password-guide" &&
                 source.DocumentName == "password-reset.md" &&
-                source.ChunkIndex == 1);
+                source.ChunkIndex == 1 &&
+                source.ChunkId == "password-guide::chunk-0001" &&
+                source.Section == "Password Recovery");
 
             _aiChatServiceMock.Verify(
                 x => x.GenerateGroundedResponseAsync(
@@ -335,14 +345,14 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
             // Arrange
             var retrievedChunks = new[]
             {
-        new RetrievedChunk(
-            new DocumentChunk(
-                "product-guide",
-                "product-guide.md",
-                0,
-                "The application supports inventory management."),
-            0.95)
-    };
+                new RetrievedChunk(
+                    new DocumentChunk(
+                        "product-guide",
+                        "product-guide.md",
+                        0,
+                        "The application supports inventory management."),
+                    0.95)
+            };
 
             _retrieverMock
                 .Setup(x => x.SearchAsync(
@@ -388,6 +398,63 @@ namespace EnterpriseAIAssistant.Application.Tests.Services
                     It.IsAny<Guid?>(),
                     It.IsAny<CancellationToken>()),
                 Times.Never);
+        }
+
+
+        [Fact]
+        public async Task AskAsync_WhenSectionIsNull_PreservesNullSectionInSources()
+        {
+            // Arrange
+            var chunk = new DocumentChunk(
+                "general-guide",
+                "general-guide.md",
+                0,
+                "General information.");
+
+            var retrievedChunks = new[]
+            {
+                new RetrievedChunk(chunk, 0.95)
+            };
+
+            _retrieverMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<int?>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(retrievedChunks);
+
+            _contextRelevantEvaluatorMock
+                .Setup(x => x.IsContextSufficientAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<IReadOnlyList<RetrievedChunk>>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            _aiChatServiceMock
+                .Setup(x => x.GenerateGroundedResponseAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<IReadOnlyList<RetrievedChunk>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<Guid?>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync("General information.");
+
+            var service = CreateService();
+
+            // Act
+            var result = await service.AskAsync(
+                "Tell me about the guide.",
+                "conversation-123",
+                Guid.NewGuid());
+
+            // Assert
+            var source = Assert.Single(result.Sources);
+
+            Assert.Equal("general-guide", source.DocumentId);
+            Assert.Equal("general-guide.md", source.DocumentName);
+            Assert.Equal(0, source.ChunkIndex);
+            Assert.Equal("general-guide::chunk-0000", source.ChunkId);
+            Assert.Null(source.Section);
         }
     }
 }

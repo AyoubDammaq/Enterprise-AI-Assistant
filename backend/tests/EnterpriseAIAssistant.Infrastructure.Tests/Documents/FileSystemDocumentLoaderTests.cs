@@ -192,6 +192,80 @@ public sealed class FileSystemDocumentLoaderTests : IDisposable
         Assert.Equal("Default path", chunk.Content);
     }
 
+    [Fact]
+    public async Task LoadAsync_SameDirectory_ShouldGenerateStableChunkIds()
+    {
+        // Arrange
+        var firstLoad = await _loader.LoadAsync(_testDirectory);
+        var secondLoad = await _loader.LoadAsync(_testDirectory);
+
+        // Act
+        var firstIds = firstLoad
+            .Select(chunk => chunk.ChunkId)
+            .ToList();
+
+        var secondIds = secondLoad
+            .Select(chunk => chunk.ChunkId)
+            .ToList();
+
+        // Assert
+        Assert.Equal(firstIds, secondIds);
+    }
+
+    [Fact]
+    public async Task LoadAsync_MultipleDocuments_ShouldGenerateDistinctChunkIds()
+    {
+        // Arrange
+        var chunks = await _loader.LoadAsync(_testDirectory);
+
+        // Act
+        var chunkIds = chunks
+            .Select(chunk => chunk.ChunkId)
+            .ToList();
+
+        // Assert
+        Assert.Equal(
+            chunkIds.Count,
+            chunkIds.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task LoadAsync_ShouldPreserveDocumentProvenance()
+    {
+        // Arrange
+        await File.WriteAllTextAsync(
+            Path.Combine(_testDirectory, "support-faq.md"),
+            "First document content");
+
+        var nestedDirectory = Path.Combine(_testDirectory, "guides");
+        Directory.CreateDirectory(nestedDirectory);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(nestedDirectory, "setup.txt"),
+            "Second document content");
+
+        // Act
+        var chunks = await _loader.LoadAsync(_testDirectory);
+
+        // Assert
+        Assert.NotEmpty(chunks);
+
+        foreach (var chunk in chunks)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(chunk.DocumentId));
+            Assert.False(string.IsNullOrWhiteSpace(chunk.Source));
+
+            Assert.Equal(
+                $"{chunk.DocumentId}::chunk-{chunk.ChunkIndex:D4}",
+                chunk.ChunkId);
+        }
+
+        Assert.Contains(chunks, chunk => chunk.Source == "support-faq.md");
+        Assert.Contains(
+            chunks,
+            chunk => chunk.Source == Path.Combine("guides", "setup.txt"));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_testDirectory))

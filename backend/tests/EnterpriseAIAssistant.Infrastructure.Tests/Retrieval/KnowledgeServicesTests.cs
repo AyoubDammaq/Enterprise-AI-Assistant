@@ -121,6 +121,95 @@ public sealed class KnowledgeServicesTests
         Assert.Equal(0, embeddings.Calls);
     }
 
+
+    [Fact]
+    public async Task Indexer_PreservesChunkMetadata_WhenStoringChunks()
+    {
+        // Arrange
+        var embeddings = new FakeEmbeddingService(
+            _ => new float[] { 1f, 0f });
+
+        var store = CreateStore();
+        var indexer = new KnowledgeIndexer(embeddings, store);
+
+        var chunk = new DocumentChunk(
+            DocumentId: "support-faq",
+            Source: "support-faq.md",
+            ChunkIndex: 3,
+            Content: "How to reset a password?")
+        {
+            Section = "Account Management"
+        };
+
+        // Act
+        var indexedCount = await indexer.IndexAsync(new[] { chunk });
+
+        var results = await store.SearchAsync(
+            new float[] { 1f, 0f },
+            topK: 5);
+
+        // Assert
+        Assert.Equal(1, indexedCount);
+
+        var result = Assert.Single(results);
+        var indexedChunk = result.Chunk;
+
+        Assert.Equal("support-faq", indexedChunk.DocumentId);
+        Assert.Equal("support-faq.md", indexedChunk.Source);
+        Assert.Equal(3, indexedChunk.ChunkIndex);
+        Assert.Equal("support-faq::chunk-0003", indexedChunk.ChunkId);
+        Assert.Equal("Account Management", indexedChunk.Section);
+        Assert.Equal("How to reset a password?", indexedChunk.Content);
+    }
+
+    [Fact]
+    public async Task Retriever_PreservesChunkMetadata_WhenReturningResults()
+    {
+        // Arrange
+        var embeddings = new FakeEmbeddingService(
+            _ => new float[] { 1f, 0f });
+
+        var store = CreateStore();
+
+        var chunk = new DocumentChunk(
+            DocumentId: "support-faq",
+            Source: "support-faq.md",
+            ChunkIndex: 4,
+            Content: "How to reset a password?")
+        {
+            Section = "Account Management"
+        };
+
+        await store.UpsertAsync(new[]
+        {
+        new EmbeddedChunk(chunk, new float[] { 1f, 0f })
+    });
+
+        var options = Options.Create(
+            new RetrievalOptions { TopK = 5 });
+
+        var retriever = new KnowledgeRetriever(
+            embeddings,
+            store,
+            options);
+
+        // Act
+        var results = await retriever.SearchAsync("password reset");
+
+        // Assert
+        var result = Assert.Single(results);
+        var retrievedChunk = result.Chunk;
+
+        Assert.Equal("support-faq", retrievedChunk.DocumentId);
+        Assert.Equal("support-faq.md", retrievedChunk.Source);
+        Assert.Equal(4, retrievedChunk.ChunkIndex);
+        Assert.Equal("support-faq::chunk-0004", retrievedChunk.ChunkId);
+        Assert.Equal("Account Management", retrievedChunk.Section);
+        Assert.Equal("How to reset a password?", retrievedChunk.Content);
+
+        Assert.Equal(1, embeddings.Calls);
+    }
+
     private static EmbeddedChunk Embedded(string source, string content, IReadOnlyList<float> vector)
     {
         var chunk = new DocumentChunk(source, source, 0, content);
