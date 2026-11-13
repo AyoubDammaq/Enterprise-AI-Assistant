@@ -17,17 +17,23 @@ public sealed class KnowledgeRetriever(
     public async Task<IReadOnlyList<RetrievedChunk>> SearchAsync(
         string query,
         int? topK = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? sourceFilter = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
 
+        if (sourceFilter is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(sourceFilter);
+        }
+
         var effectiveTopK = topK ?? _options.TopK;
 
-        if (effectiveTopK < 1)
+        if (effectiveTopK is < 1 or > InMemoryVectorStore.MaximumTopK)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(topK),
-                "topK must be greater than zero.");
+                $"topK must be between 1 and {InMemoryVectorStore.MaximumTopK}.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -38,6 +44,7 @@ public sealed class KnowledgeRetriever(
         return await _vectorStore.SearchAsync(
             queryEmbedding,
             effectiveTopK,
-            cancellationToken);
+            cancellationToken,
+            sourceFilter);
     }
 }

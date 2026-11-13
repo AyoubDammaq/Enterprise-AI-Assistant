@@ -439,6 +439,187 @@ public sealed class InMemoryVectorStoreTests
         Assert.Equal("How to reset a password?", retrievedChunk.Content);
     }
 
+    [Fact]
+    public async Task SearchAsync_WithSourceFilter_ReturnsOnlyMatchingSource()
+    {
+        // Arrange
+        var store = CreateStore();
+
+        await store.UpsertAsync(
+        [
+            CreateEmbeddedChunk(
+            "faq",
+            "support-faq.md",
+            0,
+            [1f, 0f]),
+
+        CreateEmbeddedChunk(
+            "guide",
+            "product-guide.md",
+            0,
+            [0.8f, 0.6f])
+        ]);
+
+        // Act
+        var results = await store.SearchAsync(
+            [1f, 0f],
+            topK: 5,
+            sourceFilter: "support-faq.md");
+
+        // Assert
+        var result = Assert.Single(results);
+
+        Assert.Equal("support-faq.md", result.Chunk.Source);
+    }
+
+    [Fact]
+    public async Task SearchAsync_WithUnknownSourceFilter_ReturnsEmptyResults()
+    {
+        // Arrange
+        var store = CreateStore();
+
+        await store.UpsertAsync(
+        [
+            CreateEmbeddedChunk(
+            "faq",
+            "support-faq.md",
+            0,
+            [1f, 0f]),
+
+        CreateEmbeddedChunk(
+            "guide",
+            "product-guide.md",
+            0,
+            [0.8f, 0.6f])
+        ]);
+
+        // Act
+        var results = await store.SearchAsync(
+            [1f, 0f],
+            topK: 5,
+            sourceFilter: "unknown.md");
+
+        // Assert
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public async Task UpsertAsync_ChunkWithoutSource_Throws()
+    {
+        // Arrange
+        var store = CreateStore();
+
+        var chunk = new DocumentChunk(
+            "document-1",
+            "",
+            0,
+            "Some document content");
+
+        var embeddedChunk = new EmbeddedChunk(
+            chunk,
+            new float[] { 1f, 0f });
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => store.UpsertAsync([embeddedChunk]));
+    }
+
+    [Fact]
+    public async Task SearchAsync_WithoutSourceFilter_ReturnsAllMatchingSources()
+    {
+        // Arrange
+        var store = CreateStore();
+
+        await store.UpsertAsync(
+        [
+            CreateEmbeddedChunk(
+            "faq",
+            "support-faq.md",
+            0,
+            [1f, 0f]),
+
+        CreateEmbeddedChunk(
+            "guide",
+            "product-guide.md",
+            0,
+            [0.8f, 0.6f])
+        ]);
+
+        // Act
+        var results = await store.SearchAsync(
+            [1f, 0f],
+            topK: 5);
+
+        // Assert
+        Assert.Equal(2, results.Count);
+    }
+
+    [Fact]
+    public async Task SearchAsync_WithSourceFilter_IsCaseInsensitive()
+    {
+        // Arrange
+        var store = CreateStore();
+
+        await store.UpsertAsync(
+        [
+            CreateEmbeddedChunk(
+            "faq",
+            "support-faq.md",
+            0,
+            [1f, 0f])
+        ]);
+
+        // Act
+        var results = await store.SearchAsync(
+            [1f, 0f],
+            topK: 5,
+            sourceFilter: "SUPPORT-FAQ.MD");
+
+        // Assert
+        var result = Assert.Single(results);
+
+        Assert.Equal("support-faq.md", result.Chunk.Source);
+    }
+
+    [Fact]
+    public async Task SearchAsync_WithSourceFilter_AppliesFilterBeforeTopK()
+    {
+        // Arrange
+        var store = CreateStore();
+
+        await store.UpsertAsync(
+        [
+            CreateEmbeddedChunk(
+            "other-1",
+            "product-guide.md",
+            0,
+            [1f, 0f]),
+
+        CreateEmbeddedChunk(
+            "other-2",
+            "troubleshooting.md",
+            0,
+            [0.99f, 0.1f]),
+
+        CreateEmbeddedChunk(
+            "faq",
+            "support-faq.md",
+            0,
+            [0.8f, 0.6f])
+        ]);
+
+        // Act
+        var results = await store.SearchAsync(
+            [1f, 0f],
+            topK: 1,
+            sourceFilter: "support-faq.md");
+
+        // Assert
+        var result = Assert.Single(results);
+
+        Assert.Equal("support-faq.md", result.Chunk.Source);
+    }
+
     private static EmbeddedChunk CreateEmbeddedChunk(
         string documentId,
         string source,

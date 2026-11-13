@@ -8,5 +8,6 @@ public interface IKnowledgeRetriever
     Task<IReadOnlyList<RetrievedChunk>> SearchAsync(
         string query,
         int? topK = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? sourceFilter = null);
 }

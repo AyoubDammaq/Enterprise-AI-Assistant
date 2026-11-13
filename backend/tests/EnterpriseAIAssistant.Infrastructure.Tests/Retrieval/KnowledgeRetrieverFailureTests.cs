@@ -78,7 +78,8 @@ public sealed class KnowledgeRetrieverFailureTests
         public Task<IReadOnlyList<RetrievedChunk>> SearchAsync(
             IReadOnlyList<float> queryEmbedding,
             int topK,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string? sourceFilter = null)
         {
             return Task.FromException<IReadOnlyList<RetrievedChunk>>(
                 new InvalidOperationException("Vector store unavailable."));

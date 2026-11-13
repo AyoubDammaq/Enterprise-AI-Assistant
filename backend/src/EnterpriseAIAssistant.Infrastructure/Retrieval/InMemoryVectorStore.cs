@@ -98,8 +98,15 @@ public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger, IOp
     public Task<IReadOnlyList<RetrievedChunk>> SearchAsync(
         IReadOnlyList<float> queryEmbedding,
         int topK,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? sourceFilter = null)
     {
+
+        if (sourceFilter is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(sourceFilter);
+        }
+
         ArgumentNullException.ThrowIfNull(queryEmbedding);
         ValidateTopK(topK);
         ValidateVector(queryEmbedding, nameof(queryEmbedding));
@@ -132,7 +139,14 @@ public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger, IOp
                     $"received {queryEmbedding.Count}.", nameof(queryEmbedding));
             }
 
-            snapshot = _chunks.Values.ToList();
+            snapshot = _chunks.Values
+                .Where(item =>
+                    sourceFilter is null ||
+                    string.Equals(
+                        item.Chunk.Source,
+                        sourceFilter,
+                        StringComparison.OrdinalIgnoreCase))
+                .ToList();
         }
 
         var ranked = new List<RetrievedChunk>(snapshot.Count);
@@ -145,6 +159,7 @@ public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger, IOp
                 item.Chunk.Source,
                 item.Chunk.ChunkIndex,
                 score);
+            
             ranked.Add(new RetrievedChunk(item.Chunk, score));
         }
 
@@ -159,13 +174,13 @@ public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger, IOp
         stopwatch.Stop();
 
         _logger.LogInformation(
-            "[RAG] Search completed. IndexedChunks={IndexedChunks}, " +
-            "ReturnedResults={ReturnedResults}, TopK={TopK}, " +
-            "MinimumSimilarityScore={MinimumSimilarityScore}, DurationMs={DurationMs}",
+            "[RAG] Search completed. SourceFilter={SourceFilter}, " +
+            "CandidateChunks={CandidateChunks}, ReturnedResults={ReturnedResults}, " +
+            "TopK={TopK}, DurationMs={DurationMs}",
+            sourceFilter ?? "AllSources",
             snapshot.Count,
             result.Count,
             topK,
-            _retrievalOptions.MinimumSimilarityScore,
             stopwatch.ElapsedMilliseconds);
 
         return Task.FromResult(result);

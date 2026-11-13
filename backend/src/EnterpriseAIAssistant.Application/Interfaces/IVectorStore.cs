@@ -12,5 +12,6 @@ public interface IVectorStore
     Task<IReadOnlyList<RetrievedChunk>> SearchAsync(
         IReadOnlyList<float> queryEmbedding,
         int topK,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? sourceFilter = null);
 }
