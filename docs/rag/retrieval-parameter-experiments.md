@@ -106,6 +106,8 @@ MRR = \frac{1}{N}\sum_{i=1}^{N}\frac{1}{rank_i}
 
 If the expected source is not retrieved, its reciprocal rank is zero.
 
+**Metric scope:** The Hit Rate and MRR values in Experiment B are calculated using the expected source document. They do not establish that every retrieved chunk is relevant or contains sufficient evidence.
+
 ### 4.4 Negative query inspection
 
 For Q6 and Q7, we record whether the retriever returns any chunks.
@@ -188,7 +190,27 @@ Evaluate how the minimum similarity score affects retrieval quality and the syst
 - Same embedding model
 - A new vector store is created for each threshold.
 
-### 6.3 Results
+### 6.3 Execution details
+
+Experiment B was executed on **November 16, 2026** using the following command from the `backend` directory:
+
+```powershell
+dotnet test .\tests\EnterpriseAIAssistant.Infrastructure.Tests\EnterpriseAIAssistant.Infrastructure.Tests.csproj --filter "FullyQualifiedName~DiagnoseRetrieval_WithDifferentSimilarityThresholds" --logger "console;verbosity=detailed"
+```
+
+**Execution result:**
+
+| Result | Count |
+|---|---:|
+| Test cases | 4 |
+| Passed | 4 |
+| Failed | 0 |
+| Skipped | 0 |
+| Duration | Approximately 14 seconds |
+
+All four threshold configurations completed successfully.
+
+### 6.4 Results
 
 | Minimum similarity score | Hit Rate@1 | Hit Rate@2 | MRR | Q6 returned results? | Q7 returned results? |
 |---:|---:|---:|---:|---|---|
@@ -197,7 +219,7 @@ Evaluate how the minimum similarity score affects retrieval quality and the syst
 | 0.70 | 80% | 80% | 0.8000 | No | Yes |
 | 0.80 | 20% | 20% | 0.2000 | No | No |
 
-### 6.4 Detailed observations
+### 6.5 Detailed observations
 
 #### Threshold = 0.50
 
@@ -219,7 +241,11 @@ The positive-query metrics remain unchanged:
 
 Q6 and Q7 still returned results.
 
-This threshold provides the same measured positive retrieval performance as 0.50 while filtering out some lower-scoring chunks.
+For Q6, the highest retrieved similarity score was `0.6856`.
+
+For Q7, the highest retrieved similarity score was `0.7884`.
+
+This threshold provides the same measured positive retrieval performance as 0.50 while filtering out some lower-scoring chunks. However, it does not prevent semantically similar but unsupported results for the negative questions.
 
 #### Threshold = 0.70
 
@@ -231,7 +257,7 @@ The retriever achieved:
 
 Q5, concerning the INV-001 error, returned no chunks because its best similarity score was approximately `0.6184`.
 
-Q6 returned no chunks, but Q7 still returned results.
+Q6 returned no chunks, but Q7 still returned a result with a similarity score of `0.7884`.
 
 This threshold is too restrictive for the current evaluation dataset because it rejects a valid positive question.
 
@@ -247,9 +273,11 @@ Only Q2 retrieved its expected source.
 
 Most valid questions were rejected because their similarity scores were below the threshold.
 
-This configuration is unsuitable for the current corpus.
+Both negative questions returned no chunks.
 
-### 6.5 Important finding: Similarity is not factual evidence
+Although this threshold filters the two negative queries in this experiment, it also rejects four of the five positive queries. It is therefore unsuitable for the current corpus.
+
+### 6.6 Important finding: Similarity is not factual evidence
 
 The experiments reveal an important limitation of using a single global similarity threshold.
 
@@ -298,6 +326,8 @@ public sealed class RetrievalOptions
 These values are experimental defaults, not final production parameters.
 
 They should remain subject to validation as the corpus and evaluation dataset grow.
+
+The selected threshold does not guarantee that negative questions will produce no retrieval results. Answerability detection and grounded generation must be evaluated separately.
 
 ---
 

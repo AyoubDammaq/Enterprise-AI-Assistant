@@ -46,11 +46,14 @@ ollama list
 
 Make sure the Ollama service is running before executing integration tests.
 
-## 3. RAG Configuration
+## 3. Historical RAG Configuration — November 11, 2026
 
-Configuration from `src/EnterpriseAIAssistant.API/appsettings.json`:
+The following values were recorded for the initial baseline
+on November 11, 2026. They represent the historical evaluation
+configuration and must not be interpreted as the current
+application settings.
 
-| Parameter | Value |
+| Parameter | Historical value |
 |---|---:|
 | Ollama endpoint | http://localhost:11434 |
 | Chat model | llama3.2 |
@@ -58,14 +61,27 @@ Configuration from `src/EnterpriseAIAssistant.API/appsettings.json`:
 | Embedding dimensions | 768 |
 | Chunk size | 800 |
 | Chunk overlap | 100 |
-| Retrieval TopK | 5 |
+| Retrieval Top-K | 5 |
 | Minimum similarity score | 0.50 |
 
-The document loader splits documents into chunks of 800 characters
-with an overlap of 100 characters.
+### Current application configuration
 
-The retriever requests at most five chunks and applies a minimum
-similarity score of 0.50.
+The current values verified in
+`backend/src/EnterpriseAIAssistant.API/appsettings.json`
+are:
+
+| Parameter | Current value |
+|---|---:|
+| Chunking strategy | ParagraphAware |
+| Chunk size | 800 |
+| Chunk overlap | 100 |
+| Retrieval Top-K | 3 |
+| Minimum similarity score | 0.60 |
+| Embedding model | nomic-embed-text |
+| Embedding dimensions | 768 |
+
+The historical baseline results below must remain associated
+with their original execution date and configuration.
 
 ## 4. Evaluation Dataset
 

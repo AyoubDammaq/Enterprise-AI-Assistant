@@ -11,30 +11,66 @@ The objectives are to:
 - Investigate possible causes without changing multiple parameters simultaneously.
 - Document remaining limitations and future experiments.
 
+
 ## 2. Evaluation Environment
+
+### 2.1 Execution environment
 
 | Property | Value |
 |---|---|
 | Branch | `week-10/rag-dataset-stabilization` |
-| Latest commit | `ad2a772` |
+| Latest commit at documentation review | `705b605` |
 | Target framework | .NET 10 |
 | Chat model | `llama3.2` |
 | Embedding model | `nomic-embed-text` |
+| Embedding dimensions | 768 |
 | Knowledge documents | 3 |
 | Indexed chunks | 6 |
 | Evaluation dataset | Q1–Q7 |
-| Test execution | `dotnet test` |
-| Evaluation duration | 173.1 seconds |
+| Operating environment | Windows |
+| Ollama version | 0.40.13 |
 
-Retrieval configuration:
+### 2.2 Application retrieval configuration
 
-| Parameter | Value |
+The following values were verified in `backend/src/EnterpriseAIAssistant.API/appsettings.json`.
+
+| Parameter | Configured value |
 |---|---|
-| Top-K | Not recorded in evaluation output |
-| Similarity threshold | Not recorded in evaluation output |
-| Chunk size | Not recorded in evaluation output |
-| Chunk overlap | Not recorded in evaluation output |
-| Source filter | Not recorded in evaluation output |
+| Top-K | 3 |
+| Minimum similarity score | 0.60 |
+| Chunking strategy | ParagraphAware |
+| Chunk size | 800 |
+| Chunk overlap | 100 |
+| Embedding model | nomic-embed-text |
+| Embedding dimensions | 768 |
+
+The retrieval parameter experiments documented separately use controlled diagnostic configurations. Their experimental thresholds must not be confused with the application's configured threshold.
+
+### 2.3 Full solution test execution
+
+The complete solution test suite was executed using:
+
+```powershell
+dotnet test .\EnterpriseAIAssistant.slnx
+```
+
+Execution summary:
+
+| Result | Count |
+|---|---:|
+| Total tests | 225 |
+| Passed | 224 |
+| Failed | 0 |
+| Skipped | 1 |
+| Test duration | 134.9 seconds |
+
+The skipped test is:
+
+`Memory_ShouldPersistAcrossProcessRestarts`
+
+This test is skipped because the current memory implementation uses volatile in-memory storage.
+
+The complete test suite passed without failures.
 
 ## 3. Baseline Results
 
@@ -55,7 +91,9 @@ All seven questions were correctly classified.
 
 ## 4. New Evaluation Results
 
-The Day 9 evaluation produced the following results:
+The full Q1–Q7 evaluation diagnostic completed successfully during the full solution test execution.
+
+The classification results were:
 
 | Metric | Baseline | Week 10 |
 |---|---:|---:|
@@ -75,7 +113,9 @@ Confusion matrix:
 - TN = 2
 - FN = 0
 
-No classification errors were detected.
+No classification errors were detected in the seven-question evaluation dataset.
+
+These metrics describe the current small evaluation dataset. They must not be interpreted as evidence of production-level reliability.
 
 ## 5. Question-Level Analysis
 
@@ -151,13 +191,11 @@ The Day 8 improvements include:
 - Embedding validation, including vector dimensions and finite values.
 - Additional vector store and retriever tests.
 
-During the Day 9 evaluation, no retrieval parameter change was recorded.
+During the Week 10 evaluation, no application code or retrieval configuration changes were applied.
 
-The current Git working tree reports a modification to:
+The subsequent retrieval parameter experiments were diagnostic only. They evaluated different Top-K and similarity threshold values without changing the application's configured parameters.
 
-`tests/EnterpriseAIAssistant.Infrastructure.Tests/Evaluation/RetrievalMetricsCalculatorTests.cs`
-
-This test modification should be reviewed separately. The evaluation output does not establish that the production retrieval pipeline was changed during this run.
+The documentation updates performed during Day 10 do not modify the application code.
 
 ## 8. Proposed Controlled Experiments
 
@@ -196,19 +234,26 @@ This is expected because the current memory implementation uses volatile in-memo
 
 The Week 10 evaluation successfully completed all seven questions.
 
+The complete solution test suite reported:
+- 224 passed tests.
+- 1 skipped test.
+- 0 failed tests.
+
 Classification remained stable compared with the baseline:
 - 5/5 supported questions correctly classified.
 - 2/2 unsupported questions correctly rejected.
 - No false positives or false negatives.
 
-No measurable classification improvement was observed.
+No measurable classification improvement was observed on the current seven-question dataset.
 
 However, the retrieval diagnostics revealed two weaknesses:
 - Q1 retrieves unrelated chunks alongside the relevant password-reset instructions.
 - Q7 retrieves semantically related content with relatively high scores, although the requested database information is absent.
 
+The controlled retrieval experiments further demonstrated that increasing the similarity threshold can reduce negative-query retrieval, but may also reject valid positive questions.
+
 The next step is to investigate retrieval precision through controlled experiments. Chunking, Top-K, similarity threshold and embeddings must be evaluated independently.
 
-The unchanged classification score is a useful experimental result: the Day 8 improvements preserved the existing behavior, while the Day 9 analysis identified opportunities to improve retrieval quality.
+The unchanged classification score is a useful experimental result: the Day 8 improvements preserved the existing behavior, while the Week 10 analysis identified opportunities to improve retrieval quality.
 
-**Final status: Evaluation completed — retrieval optimization still required.**
+**Final status: Evaluation completed — retrieval optimization and answerability evaluation still required.**

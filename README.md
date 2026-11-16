@@ -96,7 +96,43 @@ The following checks are configured:
 
 ## Testing
 
-The solution includes a dedicated test project for each layer of the backend, using xUnit as the testing framework. To run the tests, execute the following command from the `backend` directory:
+The solution includes dedicated test projects for each backend layer,
+using xUnit.
 
-```sh
-dotnet test EnterpriseAIAssistant.slnx
+### Prerequisites
+
+- .NET 10 SDK
+- Ollama installed and running
+- `llama3.2` chat model
+- `nomic-embed-text` embedding model
+
+Pull the required models:
+
+```powershell
+ollama pull llama3.2
+ollama pull nomic-embed-text
+```
+
+### Run the complete test suite
+
+From the `backend` directory, configure the RAG corpus path:
+
+```powershell
+$env:RAG_DOCUMENTS_PATH = (Resolve-Path ".\tests\EnterpriseAIAssistant.Infrastructure.Tests\TestData\RAG\Corpus").Path
+```
+
+Then execute:
+
+```powershell
+dotnet test .\EnterpriseAIAssistant.slnx
+```
+
+The integration and RAG diagnostic tests require a running Ollama service.
+
+For detailed RAG evaluation results and experimental configurations,
+see:
+
+- `docs/RAG-Evaluation.md`
+- `docs/rag/evaluation-baseline.md`
+- `docs/rag/evaluation-results-week-10.md`
+- `docs/rag/retrieval-parameter-experiments.md`

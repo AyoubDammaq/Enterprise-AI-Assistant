@@ -50,19 +50,27 @@ Evaluation dataset:
 
 ## 3. Evaluation Configuration
 
-The diagnostic integration test uses:
+The current application retrieval configuration is defined in:
 
-| Parameter | Value |
+`backend/src/EnterpriseAIAssistant.API/appsettings.json`
+
+| Parameter | Current value |
 |---|---|
 | Embedding provider | Ollama |
 | Embedding model | `nomic-embed-text` |
 | Embedding dimensions | 768 |
+| Chunking strategy | ParagraphAware |
 | Chunk size | 800 |
 | Chunk overlap | 100 |
-| Top-K | 5 |
-| Minimum similarity score | 0.50 |
+| Top-K | 3 |
+| Minimum similarity score | 0.60 |
 
-The test loads documents exclusively from the `Corpus` directory.
+The retrieval parameter experiments documented in
+`docs/rag/retrieval-parameter-experiments.md` use separate diagnostic
+configurations to compare different Top-K and similarity threshold values.
+
+Experimental values must not be confused with the current application
+configuration.
 
 ## 4. Retrieval Evaluation Results
 
