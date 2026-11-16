@@ -2,6 +2,7 @@
 using EnterpriseAIAssistant.Infrastructure.Configuration;
 using EnterpriseAIAssistant.Infrastructure.Documents;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -17,8 +18,11 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
         private static InMemoryVectorStore CreateStore(double minimumSimilarityScore = 0.50) =>
             new(NullLogger<InMemoryVectorStore>.Instance, Options.Create(new RetrievalOptions { MinimumSimilarityScore = minimumSimilarityScore }));
 
-        [Fact]
-        public async Task DiagnoseRetrieval_WithRealOllamaEmbeddings()
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(5)]
+        public async Task DiagnoseRetrieval_WithRealOllamaEmbeddings(int topK)
         {
             // Arrange: load the evaluation corpus.
             var documentsPath =
@@ -64,7 +68,7 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
             IKnowledgeRetriever retriever = new KnowledgeRetriever(
                 embeddingService,
                 vectorStore,
-                Options.Create(new RetrievalOptions { TopK = 5 }));
+                Options.Create(new RetrievalOptions { TopK = topK }));
 
 
             // Load only the knowledge documents from the Corpus directory.
@@ -202,6 +206,12 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
             var negativeQueriesWithRetrievedChunks = 0;
             var negativeQueriesWithoutRetrievedChunks = 0;
 
+            _logger.LogInformation("");
+            _logger.LogInformation("========================================");
+            _logger.LogInformation("EXPERIMENT A - TOP-K = {TopK}", topK);
+            _logger.LogInformation("Minimum Similarity Score = 0.50");
+            _logger.LogInformation("========================================");
+
             foreach (var testCase in testCases)
             {
                 _logger.LogInformation("--- {QuestionId} ---", testCase.Id);
@@ -216,10 +226,10 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
 
                 var results = await retriever.SearchAsync(
                     testCase.Question,
-                    topK: 5);
+                    topK: topK);
 
                 var retrievedSources = results
-                    .Select(result => result.Chunk.Source)
+                    .Select(result => Path.GetFileName(result.Chunk.Source))
                     .ToList();
 
                 if (results.Count == 0)
@@ -442,6 +452,248 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
 
             _logger.LogInformation(
                 "=====================================================");
+        }
+
+
+
+        [Theory]
+        [InlineData(0.50)]
+        [InlineData(0.60)]
+        [InlineData(0.70)]
+        [InlineData(0.80)]
+        public async Task DiagnoseRetrieval_WithDifferentSimilarityThresholds(
+            double minimumSimilarityScore)
+        {
+            const int topK = 3;
+
+            // 1. Validate corpus path.
+            var documentsPath =
+                Environment.GetEnvironmentVariable("RAG_DOCUMENTS_PATH");
+
+            Assert.False(
+                string.IsNullOrWhiteSpace(documentsPath),
+                "Set the RAG_DOCUMENTS_PATH environment variable.");
+
+            Assert.True(
+                Directory.Exists(documentsPath),
+                $"Documents directory not found: {documentsPath}");
+
+            // 2. Load the same knowledge documents as Experiment A.
+            var documentLoader = new FileSystemDocumentLoader(
+                Options.Create(new DocumentLoadingOptions
+                {
+                    RootDirectory = documentsPath!,
+                    ChunkSize = 800,
+                    ChunkOverlap = 100
+                }));
+
+            var loadedChunks =
+                await documentLoader.LoadAsync(documentsPath!);
+
+            Assert.NotEmpty(loadedChunks);
+
+            var chunks = loadedChunks
+                .Where(chunk =>
+                    !string.Equals(
+                        Path.GetFileName(chunk.Source),
+                        "evaluation-questions.md",
+                        StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var knowledgeSources = chunks
+                .Select(chunk => Path.GetFileName(chunk.Source))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            Assert.Equal(3, knowledgeSources.Count);
+
+            // 3. Initialize the same embedding model.
+            using var httpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(60)
+            };
+
+            IEmbeddingService embeddingService =
+                new OllamaEmbeddingService(
+                    httpClient,
+                    Options.Create(new OllamaEmbeddingOptions
+                    {
+                        Endpoint = "http://localhost:11434",
+                        EmbeddingModel = "nomic-embed-text",
+                        EmbeddingDimensions = 768
+                    }));
+
+            // 4. Create a NEW vector store with the tested threshold.
+            IVectorStore vectorStore = CreateStore(
+                minimumSimilarityScore);
+
+            IKnowledgeIndexer indexer = new KnowledgeIndexer(
+                embeddingService,
+                vectorStore);
+
+            IKnowledgeRetriever retriever = new KnowledgeRetriever(
+                embeddingService,
+                vectorStore,
+                Options.Create(new RetrievalOptions
+                {
+                    TopK = topK
+                }));
+
+            // 5. Index the same corpus.
+            var indexedCount = await indexer.IndexAsync(chunks);
+
+            Assert.Equal(chunks.Count, indexedCount);
+
+            // 6. Same evaluation questions as Experiment A.
+            var testCases = new[]
+            {
+                (
+                    Id: "Q1",
+                    Question: "How can a user reset their Demo Portal password?",
+                    ExpectedSource: (string?)"support-faq.md"
+                ),
+                (
+                    Id: "Q2",
+                    Question: "How long is a Demo Portal account locked after failed login attempts?",
+                    ExpectedSource: (string?)"support-faq.md"
+                ),
+                (
+                    Id: "Q3",
+                    Question: "What is the default low-stock threshold in Atlas Inventory?",
+                    ExpectedSource: (string?)"product-guide.md"
+                ),
+                (
+                    Id: "Q4",
+                    Question: "Which user role can modify inventory settings and manage users?",
+                    ExpectedSource: (string?)"product-guide.md"
+                ),
+                (
+                    Id: "Q5",
+                    Question: "How should a user resolve error INV-001?",
+                    ExpectedSource: (string?)"troubleshooting.md"
+                ),
+                (
+                    Id: "Q6",
+                    Question: "What is the monthly subscription price of Atlas Inventory?",
+                    ExpectedSource: (string?)null
+                ),
+                (
+                    Id: "Q7",
+                    Question: "Which database engine does Atlas Inventory use in production?",
+                    ExpectedSource: (string?)null
+                )
+            };
+
+            var evaluationSamples =
+                new List<RetrievalEvaluationSample>();
+
+            var negativeQueriesWithResults = 0;
+            var negativeQueriesWithoutResults = 0;
+
+            _logger.LogInformation("");
+            _logger.LogInformation("========================================");
+            _logger.LogInformation(
+                "EXPERIMENT B - THRESHOLD = {Threshold:F2}",
+                minimumSimilarityScore);
+            _logger.LogInformation("Top-K = {TopK}", topK);
+            _logger.LogInformation("Indexed chunks = {Count}", indexedCount);
+            _logger.LogInformation("========================================");
+
+            // 7. Execute all seven questions.
+            foreach (var testCase in testCases)
+            {
+                var results = await retriever.SearchAsync(
+                    testCase.Question,
+                    topK: topK);
+
+                var retrievedSources = results
+                    .Select(result => Path.GetFileName(result.Chunk.Source))
+                    .ToList();
+
+                _logger.LogInformation("--- {QuestionId} ---", testCase.Id);
+                _logger.LogInformation(
+                    "Question: {Question}",
+                    testCase.Question);
+
+                _logger.LogInformation(
+                    "Expected source: {ExpectedSource}",
+                    testCase.ExpectedSource ?? "NONE");
+
+                if (results.Count == 0)
+                {
+                    _logger.LogInformation("Retrieved chunks: NONE");
+                }
+
+                foreach (var result in results)
+                {
+                    _logger.LogInformation(
+                        "Source={Source} | Chunk={ChunkIndex} | Score={Score:F4}",
+                        Path.GetFileName(result.Chunk.Source),
+                        result.Chunk.ChunkIndex,
+                        result.SimilarityScore);
+                }
+
+                if (testCase.ExpectedSource is not null)
+                {
+                    evaluationSamples.Add(
+                        new RetrievalEvaluationSample(
+                            testCase.ExpectedSource,
+                            retrievedSources));
+
+                    var found = retrievedSources.Contains(
+                        testCase.ExpectedSource,
+                        StringComparer.OrdinalIgnoreCase);
+
+                    _logger.LogInformation(
+                        "Expected source found: {Found}",
+                        found ? "YES" : "NO");
+                }
+                else if (results.Count > 0)
+                {
+                    negativeQueriesWithResults++;
+                    _logger.LogInformation(
+                        "Negative query: chunks retrieved; manual review required.");
+                }
+                else
+                {
+                    negativeQueriesWithoutResults++;
+                    _logger.LogInformation(
+                        "Negative query: no chunks retrieved. Abstention expected.");
+                }
+            }
+
+            // 8. Calculate positive-query metrics.
+            var hitRateAt1 =
+                RetrievalMetrics.CalculateHitRateAtK(
+                    evaluationSamples,
+                    k: 1);
+
+            var hitRateAt2 =
+                RetrievalMetrics.CalculateHitRateAtK(
+                    evaluationSamples,
+                    k: 2);
+
+            var mrr =
+                RetrievalMetrics.CalculateMeanReciprocalRank(
+                    evaluationSamples);
+
+            // 9. Display results.
+            _logger.LogInformation("========== EXPERIMENT B RESULTS ==========");
+            _logger.LogInformation(
+                "Threshold: {Threshold:F2}",
+                minimumSimilarityScore);
+            _logger.LogInformation("Top-K: {TopK}", topK);
+            _logger.LogInformation("Positive queries: {Count}", evaluationSamples.Count);
+            _logger.LogInformation("Hit Rate @1: {HitRate:P2}", hitRateAt1);
+            _logger.LogInformation("Hit Rate @2: {HitRate:P2}", hitRateAt2);
+            _logger.LogInformation("MRR: {MRR:F4}", mrr);
+            _logger.LogInformation(
+                "Negative queries with results: {Count}",
+                negativeQueriesWithResults);
+            _logger.LogInformation(
+                "Negative queries without results: {Count}",
+                negativeQueriesWithoutResults);
+            _logger.LogInformation("==========================================");
         }
 
         [Fact]

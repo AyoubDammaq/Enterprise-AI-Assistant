@@ -101,6 +101,12 @@ public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger, IOp
         CancellationToken cancellationToken = default,
         string? sourceFilter = null)
     {
+        _logger.LogInformation(
+             "[RAG] Configuration: RequestedTopK={RequestedTopK}, " +
+             "ConfiguredTopK={ConfiguredTopK}, MinimumSimilarityScore={Threshold}",
+             topK,
+             _retrievalOptions.TopK,
+             _retrievalOptions.MinimumSimilarityScore);
 
         if (sourceFilter is not null)
         {
