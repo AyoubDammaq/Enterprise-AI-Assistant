@@ -1,4 +1,4 @@
-﻿using EnterpriseAIAssistant.Application.Interfaces;
+using EnterpriseAIAssistant.Application.Interfaces;
 using EnterpriseAIAssistant.Infrastructure.AI;
 using EnterpriseAIAssistant.Infrastructure.Configuration;
 using EnterpriseAIAssistant.Infrastructure.Documents;
@@ -172,6 +172,8 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.AI
             Console.WriteLine("Chat model: llama3.2");
             Console.WriteLine("Embedding model: nomic-embed-text");
 
+            var errors = new List<string>();
+
             foreach (var testCase in testCases)
             {
                 Console.WriteLine();
@@ -215,6 +217,13 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.AI
 
                 var correct =
                     testCase.ExpectedSufficient == actualSufficient;
+
+                if (!correct)
+                {
+                    errors.Add(
+                        $"{testCase.Id}: expected {expectedLabel}, got {actualLabel}. " +
+                        $"Question: {testCase.Question}");
+                }
 
                 Console.WriteLine($"Expected: {expectedLabel}");
                 Console.WriteLine($"Actual:   {actualLabel}");
@@ -285,8 +294,14 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.AI
 
             Console.WriteLine();
             Console.WriteLine(
-                "Diagnostic completed. Review classification errors " +
-                "before considering the evaluator validated.");
+                "Diagnostic completed. No classification errors " +
+                "detected in this evaluation sample.");
+
+            Assert.True(
+                errors.Count == 0,
+                "Context relevance evaluation failed:" +
+                Environment.NewLine +
+                string.Join(Environment.NewLine, errors));
         }
     }
 }

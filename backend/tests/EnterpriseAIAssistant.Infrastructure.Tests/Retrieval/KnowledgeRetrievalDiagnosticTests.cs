@@ -2,6 +2,7 @@
 using EnterpriseAIAssistant.Infrastructure.Configuration;
 using EnterpriseAIAssistant.Infrastructure.Documents;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
+using EnterpriseAIAssistant.Infrastructure.Tests.Evaluation;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -199,10 +200,15 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 testCases.Count(testCase => testCase.ExpectedSource is null));
 
             // Only positive questions contribute to Hit Rate and MRR.
-            var evaluationSamples =
-                new List<RetrievalEvaluationSample>();
+            var retrievedChunkIdsByQuery =
+                new List<IReadOnlyList<string>>();
 
-            var positiveQueriesWithExpectedSourceFound = 0;
+            var relevantChunkIdsByQuery =
+                new List<IReadOnlySet<string>>();
+
+            Assert.Equal(5, RetrievalEvaluationDataset.PositiveCases.Count);
+
+            var positiveQueriesWithRelevantChunkFound = 0;
             var negativeQueriesWithRetrievedChunks = 0;
             var negativeQueriesWithoutRetrievedChunks = 0;
 
@@ -228,9 +234,20 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                     testCase.Question,
                     topK: topK);
 
-                var retrievedSources = results
-                    .Select(result => Path.GetFileName(result.Chunk.Source))
+                var retrievedChunkIds = results
+                    .Select(result => result.Chunk.ChunkId)
                     .ToList();
+
+                // Collect chunk-level evaluation data for positive questions only.
+                if (testCase.ExpectedSource is not null)
+                {
+                    var evaluationCase =
+                        RetrievalEvaluationDataset.PositiveCases.Single(
+                            item => item.Question == testCase.Question);
+
+                    retrievedChunkIdsByQuery.Add(retrievedChunkIds);
+                    relevantChunkIdsByQuery.Add(evaluationCase.RelevantChunkIds);
+                }
 
                 if (results.Count == 0)
                 {
@@ -238,12 +255,7 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
 
                     if (testCase.ExpectedSource is not null)
                     {
-                        evaluationSamples.Add(
-                            new RetrievalEvaluationSample(
-                                testCase.ExpectedSource,
-                                retrievedSources));
-
-                        _logger.LogInformation("Expected source found: NO");
+                        _logger.LogInformation("Expected chunk found: NO");
                     }
                     else
                     {
@@ -258,30 +270,38 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 foreach (var result in results)
                 {
                     _logger.LogInformation(
-                        "Retrieved chunk | Source: {Source} | Chunk: {ChunkIndex} | Score: {Score:F4}",
+                        """
+                        Retrieved chunk:
+                          ChunkId: {ChunkId}
+                          Source: {Source}
+                          ChunkIndex: {ChunkIndex}
+                          Similarity: {Score:F4}
+                          Content:
+                        {Content}
+                        """,
+                        result.Chunk.ChunkId,
                         Path.GetFileName(result.Chunk.Source),
                         result.Chunk.ChunkIndex,
-                        result.SimilarityScore);
+                        result.SimilarityScore,
+                        result.Chunk.Content);
                 }
 
                 if (testCase.ExpectedSource is not null)
                 {
-                    var found = retrievedSources.Contains(
-                        testCase.ExpectedSource,
-                        StringComparer.OrdinalIgnoreCase);
+                    var evaluationCase =
+                        RetrievalEvaluationDataset.PositiveCases.Single(
+                            item => item.Question == testCase.Question);
 
-                    evaluationSamples.Add(
-                        new RetrievalEvaluationSample(
-                            testCase.ExpectedSource,
-                            retrievedSources));
+                    var found = retrievedChunkIds.Any(
+                        evaluationCase.RelevantChunkIds.Contains);
 
                     if (found)
                     {
-                        positiveQueriesWithExpectedSourceFound++;
+                        positiveQueriesWithRelevantChunkFound++;
                     }
 
                     _logger.LogInformation(
-                        "Expected source found: {Found}",
+                        "Expected chunk found: {Found}",
                         found ? "YES" : "NO");
                 }
                 else
@@ -298,17 +318,10 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
             }
 
             // Calculate metrics using positive queries only.
-            var hitRateAt1 =
-                RetrievalMetrics.CalculateHitRateAtK(
-                    evaluationSamples, k: 1);
-
-            var hitRateAt2 =
-                RetrievalMetrics.CalculateHitRateAtK(
-                    evaluationSamples, k: 2);
-
-            var meanReciprocalRank =
-                RetrievalMetrics.CalculateMeanReciprocalRank(
-                    evaluationSamples);
+            var metrics = RetrievalMetricsCalculator.Calculate(
+                retrievedChunkIdsByQuery,
+                relevantChunkIdsByQuery,
+                k: topK);
 
             // Separate positive and negative test cases.
             var positiveQueryCount = testCases.Count(
@@ -327,15 +340,28 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
             _logger.LogInformation("Negative queries: {NegativeQueries}", negativeQueryCount);
 
             _logger.LogInformation(
-                "Positive queries with expected source found: {Found}/{Total}",
-                positiveQueriesWithExpectedSourceFound,
+                "Positive queries with relevant chunk found: {Found}/{Total}",
+                positiveQueriesWithRelevantChunkFound,
                 positiveQueryCount);
 
-            _logger.LogInformation("Hit Rate @1: {HitRateAt1:P2}", hitRateAt1);
+            _logger.LogInformation(
+                "Precision@{K}: {Precision:P2}",
+                topK,
+                metrics.PrecisionAtK);
 
-            _logger.LogInformation("Hit Rate @2: {HitRateAt2:P2}", hitRateAt2);
+            _logger.LogInformation(
+                "Recall@{K}: {Recall:P2}",
+                topK,
+                metrics.RecallAtK);
 
-            _logger.LogInformation("MRR: {MRR:F4}", meanReciprocalRank);
+            _logger.LogInformation(
+                "Hit Rate@{K}: {HitRate:P2}",
+                topK,
+                metrics.HitRateAtK);
+
+            _logger.LogInformation(
+                "MRR: {MRR:F4}",
+                metrics.MeanReciprocalRank);
 
             // Display the negative-query and abstention evaluation report.
             _logger.LogInformation("========== NEGATIVE QUERY / ABSTENTION EVALUATION ==========");
