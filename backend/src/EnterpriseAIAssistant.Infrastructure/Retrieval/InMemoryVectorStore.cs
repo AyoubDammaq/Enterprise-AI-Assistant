@@ -13,7 +13,6 @@ namespace EnterpriseAIAssistant.Infrastructure.Retrieval;
 /// </summary>
 public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger, IOptions<RetrievalOptions> retrievalOptions) : IVectorStore
 {
-    public const int MaximumTopK = 20;
     private readonly object _gate = new();
     private readonly Dictionary<(string DocumentId, int ChunkIndex), EmbeddedChunk> _chunks = new();
     private int? _vectorDimensions;
@@ -194,10 +193,10 @@ public sealed class InMemoryVectorStore(ILogger<InMemoryVectorStore> logger, IOp
 
     private static void ValidateTopK(int topK)
     {
-        if (topK is < 1 or > MaximumTopK)
+        if (topK is < 1 or > RetrievalLimits.MaximumTopK)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(topK), $"topK must be between 1 and {MaximumTopK}.");
+                nameof(topK), $"topK must be between 1 and {RetrievalLimits.MaximumTopK}.");
         }
     }
 

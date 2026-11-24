@@ -1,4 +1,4 @@
-using EnterpriseAIAssistant.Application.DTOs;
+﻿using EnterpriseAIAssistant.Application.DTOs;
 using EnterpriseAIAssistant.Infrastructure.Configuration;
 using EnterpriseAIAssistant.Infrastructure.Retrieval;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -143,6 +143,32 @@ public sealed class InMemoryVectorStoreTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => store.SearchAsync(new float[] { 1, 0 }, topK: 1, cancellation.Token));
+    }
+
+
+    [Fact]
+    public async Task SearchAsync_MaximumTopK_IsAccepted()
+    {
+        // Arrange
+        var store = CreateStore();
+
+        var chunks = Enumerable.Range(0, RetrievalLimits.MaximumTopK)
+            .Select(index => CreateEmbeddedChunk(
+                $"document-{index}",
+                $"document-{index}.md",
+                0,
+                [1f, 0f]))
+            .ToArray();
+
+        await store.UpsertAsync(chunks);
+
+        // Act
+        var results = await store.SearchAsync(
+            [1f, 0f],
+            topK: RetrievalLimits.MaximumTopK);
+
+        // Assert
+        Assert.Equal(RetrievalLimits.MaximumTopK, results.Count);
     }
 
     private static EmbeddedChunk Embedded(

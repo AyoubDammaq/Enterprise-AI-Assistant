@@ -1,4 +1,4 @@
-﻿using EnterpriseAIAssistant.Application.Interfaces;
+using EnterpriseAIAssistant.Application.Interfaces;
 using EnterpriseAIAssistant.Infrastructure.AI;
 using EnterpriseAIAssistant.Infrastructure.Documents;
 using EnterpriseAIAssistant.Infrastructure.Identity;
@@ -60,8 +60,8 @@ namespace EnterpriseAIAssistant.Infrastructure.Extensions
             services.AddOptions<RetrievalOptions>()
                 .Bind(configuration.GetSection(RetrievalOptions.SectionName))
                 .Validate(
-                    options => options.TopK is >= 1 and <= InMemoryVectorStore.MaximumTopK,
-                    $"TopK must be between 1 and {InMemoryVectorStore.MaximumTopK}.")
+                    options => options.TopK is >= 1 and <= RetrievalLimits.MaximumTopK,
+                    $"TopK must be between 1 and {RetrievalLimits.MaximumTopK}.")
                 .Validate(
                     options => double.IsFinite(options.MinimumSimilarityScore)
                                && options.MinimumSimilarityScore is >= 0.0 and <= 1.0,

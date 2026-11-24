@@ -161,3 +161,121 @@ This demonstrates that a high similarity score does not necessarily indicate rel
 - Evaluation of retrieval quality across different chunk sizes and overlap values.
 - Testing retrieval thresholds and reranking techniques.
 
+
+## 9. Reproducibility
+
+### Prerequisites
+
+The chunking comparison diagnostic requires:
+
+- A compatible .NET SDK for the solution.
+- Ollama installed and running locally.
+- The `nomic-embed-text` embedding model available in Ollama.
+- The evaluation corpus containing:
+  - `support-faq.md`
+  - `product-guide.md`
+  - `troubleshooting.md`
+
+### Corpus Configuration
+
+The diagnostic reads the corpus location from the `RAG_DOCUMENTS_PATH` environment variable.
+
+Example PowerShell configuration (from the `backend` directory):
+
+```powershell
+$env:RAG_DOCUMENTS_PATH = (Resolve-Path ".\tests\EnterpriseAIAssistant.Infrastructure.Tests\TestData\RAG\Corpus").Path
+```
+
+The evaluation questions are defined in the diagnostic test itself. They are not indexed as knowledge documents.
+
+### Embedding Configuration
+
+The diagnostic uses:
+
+| Parameter | Value |
+|---|---|
+| Provider | Ollama |
+| Endpoint | http://localhost:11434 |
+| Embedding Model | nomic-embed-text |
+| Embedding Dimensions | 768 |
+| HTTP Timeout | 60 seconds |
+
+Verify model availability with:
+
+```powershell
+ollama list
+```
+
+### Running the Experiment
+
+From the `backend` directory, execute:
+
+```powershell
+dotnet test .\tests\EnterpriseAIAssistant.Infrastructure.Tests\EnterpriseAIAssistant.Infrastructure.Tests.csproj --filter "FullyQualifiedName~DiagnoseRetrievalAcrossChunkingStrategies" --logger "console;verbosity=normal"
+```
+
+The diagnostic belongs to the `Integration` test category and requires a running Ollama instance and a valid corpus path.
+
+### Evaluation Methodology
+
+The experiment uses seven questions:
+
+- Five positive questions (Q1-Q5), each associated with an expected source document.
+- Two negative questions (Q6-Q7), for which no expected source document is defined.
+
+HitRate@1, HitRate@2, and MRR are calculated using only the five positive questions.
+
+For negative questions, the diagnostic records whether any chunks were returned. A returned chunk is not automatically considered irrelevant: its content must be reviewed to determine whether it provides useful evidence.
+
+### Reproducibility Considerations
+
+For meaningful comparisons, keep the following conditions identical across strategies:
+
+- Corpus content.
+- Embedding model and dimensions.
+- Top-K and similarity threshold.
+- Chunk size and overlap.
+- Evaluation questions.
+
+The historical results documented above describe the original experiment. A subsequent execution should be recorded separately, with its execution date and observed results, rather than silently replacing historical measurements.
+
+
+## 10. Validation Run — November 20, 2026
+
+### Execution Environment
+
+| Parameter | Observed Value |
+|---|---|
+| Runtime | .NET 10.0 |
+| Embedding Provider | Ollama |
+| Embedding Model | nomic-embed-text:latest |
+| Embedding Dimensions | 768 |
+| Corpus | Three Markdown documents |
+| Diagnostic Test | DiagnoseRetrievalAcrossChunkingStrategies |
+| Test Result | Passed |
+| Total Tests | 1 |
+| Failed Tests | 0 |
+| Skipped Tests | 0 |
+
+### Observed Retrieval Metrics
+
+| Strategy | Chunks | HitRate@1 | HitRate@2 | MRR | Negative Queries With Results |
+|---|---:|---:|---:|---:|---:|
+| FixedSize | 6 | 100% | 100% | 1.0000 | 1 |
+| ParagraphAware | 6 | 100% | 100% | 1.0000 | 1 |
+| RecursiveCharacter | 6 | 100% | 100% | 1.0000 | 1 |
+
+### Negative Query Analysis
+
+- Q6 returned zero results for all three strategies.
+- Q7 returned four chunks with FixedSize, four with ParagraphAware, and five with RecursiveCharacter.
+- A keyword inspection of the three corpus documents found no explicit database-engine or production-database information matching the search terms used during validation.
+- Q7 results therefore represent potentially unsupported retrieval and require chunk-level relevance review before being classified as false positives.
+
+### Interpretation and Limitations
+
+- The observed metrics reproduce the historical retrieval results.
+- The diagnostic logs retrieval metrics but does not assert a fixed performance baseline.
+- The evaluation uses only five positive and two negative questions over three documents.
+- Successful execution does not establish production readiness or guarantee retrieval quality on a larger corpus.
+- Further evaluation should include chunk-level relevance judgments, a larger corpus, and additional negative queries.

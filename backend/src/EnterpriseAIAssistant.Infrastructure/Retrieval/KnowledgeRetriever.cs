@@ -29,11 +29,11 @@ public sealed class KnowledgeRetriever(
 
         var effectiveTopK = topK ?? _options.TopK;
 
-        if (effectiveTopK is < 1 or > InMemoryVectorStore.MaximumTopK)
+        if (effectiveTopK is < 1 or > RetrievalLimits.MaximumTopK)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(topK),
-                $"topK must be between 1 and {InMemoryVectorStore.MaximumTopK}.");
+                $"topK must be between 1 and {RetrievalLimits.MaximumTopK}.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();

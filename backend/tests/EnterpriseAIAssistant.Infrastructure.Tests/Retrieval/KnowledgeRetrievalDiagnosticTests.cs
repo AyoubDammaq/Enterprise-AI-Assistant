@@ -897,28 +897,6 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                             Path.GetFileName(result.Chunk.Source),
                             result.Chunk.ChunkIndex,
                             result.SimilarityScore);
-
-                        // TEMPORARY: Display complete Q7 chunks for ParagraphAware.
-                        if (strategy == ChunkingStrategy.RecursiveCharacter &&
-                            testCase.Id == "Q7")
-                        {
-                            _logger.LogInformation(
-                                """
-                                ===== Q7 RETRIEVED CHUNK =====
-                                Strategy: {Strategy}
-                                Source: {Source}
-                                ChunkIndex: {ChunkIndex}
-                                Similarity: {Score:F4}
-                                Content:
-                                {Content}
-                                =============================
-                                """,
-                                strategy,
-                                Path.GetFileName(result.Chunk.Source),
-                                result.Chunk.ChunkIndex,
-                                result.SimilarityScore,
-                                result.Chunk.Content);
-                        }
                     }
 
 
