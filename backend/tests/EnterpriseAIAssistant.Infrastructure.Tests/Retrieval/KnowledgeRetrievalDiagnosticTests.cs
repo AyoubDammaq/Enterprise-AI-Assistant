@@ -149,47 +149,18 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
             // Positive questions have an expected source.
             // Negative questions intentionally have no expected source.
 
-            var testCases = new[]
-            {
-                (
-                    Id: "Q1",
-                    Question: "How can a user reset their Demo Portal password?",
-                    ExpectedSource: (string?)"support-faq.md"
-                ),
-                (
-                    Id: "Q2",
-                    Question: "How long is a Demo Portal account locked after failed login attempts?",
-                    ExpectedSource: (string?)"support-faq.md"
-                ),
-                (
-                    Id: "Q3",
-                    Question: "What is the default low-stock threshold in Atlas Inventory?",
-                    ExpectedSource: (string?)"product-guide.md"
-                ),
-                (
-                    Id: "Q4",
-                    Question: "Which user role can modify inventory settings and manage users?",
-                    ExpectedSource: (string?)"product-guide.md"
-                ),
-                (
-                    Id: "Q5",
-                    Question: "How should a user resolve error INV-001?",
-                    ExpectedSource: (string?)"troubleshooting.md"
-                ),
-                (
-                    Id: "Q6",
-                    Question: "What is the monthly subscription price of Atlas Inventory?",
-                    ExpectedSource: (string?)null
-                ),
-                (
-                    Id: "Q7",
-                    Question: "Which database engine does Atlas Inventory use in production?",
-                    ExpectedSource: (string?)null
-                )
-            };
+            var testCases = RetrievalEvaluationDataset.AllCases;
 
-            // Validate the evaluation dataset structure.
-            Assert.Equal(7, testCases.Length);
+            // Validate the centralized evaluation dataset.
+            Assert.Equal(7, testCases.Count);
+
+            Assert.Equal(
+                5,
+                testCases.Count(testCase => testCase.ExpectedSource is not null));
+
+            Assert.Equal(
+                2,
+                testCases.Count(testCase => testCase.ExpectedSource is null));
 
             Assert.Equal(
                 5,
@@ -212,6 +183,8 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
             var negativeQueriesWithRetrievedChunks = 0;
             var negativeQueriesWithoutRetrievedChunks = 0;
 
+            var negativeRetrievedResultCounts = new List<int>();
+
             _logger.LogInformation("");
             _logger.LogInformation("========================================");
             _logger.LogInformation("EXPERIMENT A - TOP-K = {TopK}", topK);
@@ -233,6 +206,12 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 var results = await retriever.SearchAsync(
                     testCase.Question,
                     topK: topK);
+
+                // Collect retrieval counts for negative questions only.
+                if (testCase.ExpectedSource is null)
+                {
+                    negativeRetrievedResultCounts.Add(results.Count);
+                }
 
                 var retrievedChunkIds = results
                     .Select(result => result.Chunk.ChunkId)
@@ -323,6 +302,11 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 relevantChunkIdsByQuery,
                 k: topK);
 
+            // Calculate abstention metrics using negative queries only.
+            var abstentionMetrics =
+                RetrievalAbstentionMetricsCalculator.Calculate(
+                    negativeRetrievedResultCounts);
+
             // Separate positive and negative test cases.
             var positiveQueryCount = testCases.Count(
                 testCase => testCase.ExpectedSource is not null);
@@ -333,7 +317,7 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
             // Display the positive retrieval evaluation report.
             _logger.LogInformation("========== POSITIVE RETRIEVAL EVALUATION ==========");
 
-            _logger.LogInformation("Total queries: {TotalQueries}", testCases.Length);
+            _logger.LogInformation("Total queries: {TotalQueries}", testCases.Count);
 
             _logger.LogInformation("Positive queries: {PositiveQueries}", positiveQueryCount);
 
@@ -380,11 +364,24 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 "Negative queries with retrieved chunks require relevance validation.");
 
             _logger.LogInformation(
+                "Abstained negative queries: {Abstained}/{Total}",
+                abstentionMetrics.AbstainedQueryCount,
+                abstentionMetrics.NegativeQueryCount);
+
+            _logger.LogInformation(
+                "Negative query retrieval rate: {RetrievalRate:P2}",
+                (double)abstentionMetrics.QueriesWithResults /
+                    abstentionMetrics.NegativeQueryCount);
+
+            _logger.LogInformation(
+                "Abstention rate: {AbstentionRate:P2}",
+                abstentionMetrics.AbstentionRate);
+
+            _logger.LogInformation(
                 "Retrieval results alone do not prove that an answer is supported.");
 
             _logger.LogInformation("============================================================");
         }
-
 
         [Fact]
         public async Task DiagnoseChunkingStrategies_WithSameCorpus()
@@ -571,50 +568,15 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
             Assert.Equal(chunks.Count, indexedCount);
 
             // 6. Same evaluation questions as Experiment A.
-            var testCases = new[]
-            {
-                (
-                    Id: "Q1",
-                    Question: "How can a user reset their Demo Portal password?",
-                    ExpectedSource: (string?)"support-faq.md"
-                ),
-                (
-                    Id: "Q2",
-                    Question: "How long is a Demo Portal account locked after failed login attempts?",
-                    ExpectedSource: (string?)"support-faq.md"
-                ),
-                (
-                    Id: "Q3",
-                    Question: "What is the default low-stock threshold in Atlas Inventory?",
-                    ExpectedSource: (string?)"product-guide.md"
-                ),
-                (
-                    Id: "Q4",
-                    Question: "Which user role can modify inventory settings and manage users?",
-                    ExpectedSource: (string?)"product-guide.md"
-                ),
-                (
-                    Id: "Q5",
-                    Question: "How should a user resolve error INV-001?",
-                    ExpectedSource: (string?)"troubleshooting.md"
-                ),
-                (
-                    Id: "Q6",
-                    Question: "What is the monthly subscription price of Atlas Inventory?",
-                    ExpectedSource: (string?)null
-                ),
-                (
-                    Id: "Q7",
-                    Question: "Which database engine does Atlas Inventory use in production?",
-                    ExpectedSource: (string?)null
-                )
-            };
+            var testCases = RetrievalEvaluationDataset.AllCases;
 
             var evaluationSamples =
                 new List<RetrievalEvaluationSample>();
 
             var negativeQueriesWithResults = 0;
             var negativeQueriesWithoutResults = 0;
+
+            var negativeRetrievedResultCounts = new List<int>();
 
             _logger.LogInformation("");
             _logger.LogInformation("========================================");
@@ -631,6 +593,12 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 var results = await retriever.SearchAsync(
                     testCase.Question,
                     topK: topK);
+
+                // Collect retrieval counts for negative questions only.
+                if (testCase.ExpectedSource is null)
+                {
+                    negativeRetrievedResultCounts.Add(results.Count);
+                }
 
                 var retrievedSources = results
                     .Select(result => Path.GetFileName(result.Chunk.Source))
@@ -703,6 +671,19 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 RetrievalMetrics.CalculateMeanReciprocalRank(
                     evaluationSamples);
 
+            // Calculate abstention metrics using negative queries only.
+            var abstentionMetrics =
+                RetrievalAbstentionMetricsCalculator.Calculate(
+                    negativeRetrievedResultCounts);
+
+            Assert.Equal(
+                negativeQueriesWithResults,
+                abstentionMetrics.QueriesWithResults);
+
+            Assert.Equal(
+                negativeQueriesWithoutResults,
+                abstentionMetrics.AbstainedQueryCount);
+
             // 9. Display results.
             _logger.LogInformation("========== EXPERIMENT B RESULTS ==========");
             _logger.LogInformation(
@@ -719,6 +700,19 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
             _logger.LogInformation(
                 "Negative queries without results: {Count}",
                 negativeQueriesWithoutResults);
+            _logger.LogInformation(
+                "Abstained negative queries: {Abstained}/{Total}",
+                abstentionMetrics.AbstainedQueryCount,
+                abstentionMetrics.NegativeQueryCount);
+
+            _logger.LogInformation(
+                "Negative query retrieval rate: {RetrievalRate:P2}",
+                (double)abstentionMetrics.QueriesWithResults /
+                    abstentionMetrics.NegativeQueryCount);
+
+            _logger.LogInformation(
+                "Abstention rate: {AbstentionRate:P2}",
+                abstentionMetrics.AbstentionRate);
             _logger.LogInformation("==========================================");
         }
 
@@ -737,45 +731,12 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 Directory.Exists(documentsPath),
                 $"Documents directory not found: {documentsPath}");
 
-            // 2. Keep the same questions for every strategy.
-            var testCases = new[]
-            {
-                (
-                    Id: "Q1",
-                    Question: "How can I reset my Demo Portal password?",
-                    ExpectedSource: (string?)"support-faq.md"
-                ),
-                (
-                    Id: "Q2",
-                    Question: "How long does an account remain locked after too many failed login attempts?",
-                    ExpectedSource: (string?)"support-faq.md"
-                ),
-                (
-                    Id: "Q3",
-                    Question: "What is the default low-stock threshold?",
-                    ExpectedSource: (string?)"product-guide.md"
-                ),
-                (
-                    Id: "Q4",
-                    Question: "Which role can modify inventory settings and manage users?",
-                    ExpectedSource: (string?)"product-guide.md"
-                ),
-                (
-                    Id: "Q5",
-                    Question: "How can I resolve error INV-001?",
-                    ExpectedSource: (string?)"troubleshooting.md"
-                ),
-                (
-                    Id: "Q6",
-                    Question: "What is the monthly subscription price?",
-                    ExpectedSource: (string?)null
-                ),
-                (
-                    Id: "Q7",
-                    Question: "Which database engine is used in production?",
-                    ExpectedSource: (string?)null
-                )
-            };
+            // 2. Reuse the centralized evaluation dataset for every strategy.
+            var testCases = RetrievalEvaluationDataset.AllCases;
+
+            Assert.Equal(
+                RetrievalEvaluationDataset.TotalQuestions,
+                testCases.Count);
 
             const int chunkSize = 800;
             const int chunkOverlap = 100;
@@ -804,7 +765,9 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 double HitRateAt1,
                 double HitRateAt2,
                 double Mrr,
-                int NegativeQueriesWithResults)>();
+                int NegativeQueriesWithResults,
+                int NegativeQueriesWithoutResults,
+                double AbstentionRate)>();
 
             _logger.LogInformation(
                 "========== RETRIEVAL STRATEGIES COMPARISON ==========");
@@ -871,6 +834,7 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                     new List<RetrievalEvaluationSample>();
 
                 var negativeQueriesWithResults = 0;
+                var negativeRetrievedResultCounts = new List<int>();
 
                 // 7. Execute exactly the same evaluation questions.
                 foreach (var testCase in testCases)
@@ -878,6 +842,12 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                     var results = await retriever.SearchAsync(
                         testCase.Question,
                         topK: topK);
+
+                    // Collect retrieval counts for negative questions only.
+                    if (testCase.ExpectedSource is null)
+                    {
+                        negativeRetrievedResultCounts.Add(results.Count);
+                    }
 
                     var retrievedSources = results
                         .Select(result =>
@@ -915,6 +885,15 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                     }
                 }
 
+                // Calculate abstention metrics for this chunking strategy.
+                var abstentionMetrics =
+                    RetrievalAbstentionMetricsCalculator.Calculate(
+                        negativeRetrievedResultCounts);
+
+                Assert.Equal(
+                    negativeQueriesWithResults,
+                    abstentionMetrics.QueriesWithResults);
+
                 // 8. Calculate metrics for positive queries only.
                 Assert.NotEmpty(evaluationSamples);
 
@@ -938,7 +917,9 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                     hitRateAt1,
                     hitRateAt2,
                     mrr,
-                    negativeQueriesWithResults));
+                    negativeQueriesWithResults,
+                    abstentionMetrics.AbstainedQueryCount,
+                    abstentionMetrics.AbstentionRate));
             }
 
             // 9. Display the final comparison.
@@ -947,26 +928,30 @@ namespace EnterpriseAIAssistant.Infrastructure.Tests.Retrieval
                 "================ RETRIEVAL COMPARISON ================");
 
             _logger.LogInformation(
-                "{Strategy,-22} | {Chunks,6} | {Hit1,8} | {Hit2,8} | {Mrr,8} | {Negative,8}",
+                "{Strategy,-22} | {Chunks,6} | {Hit1,8} | {Hit2,8} | {Mrr,8} | {Negative,8} | {Abstained,9} | {Abstention,11}",
                 "Strategy",
                 "Chunks",
                 "Hit@1",
                 "Hit@2",
                 "MRR",
-                "Neg.Results");
+                "Neg.Results",
+                "Neg.Abst.",
+                "Abstention");
 
             _logger.LogInformation(new string('-', 85));
 
             foreach (var report in reports)
             {
                 _logger.LogInformation(
-                    "{Strategy,-22} | {Chunks,6} | {Hit1,7:P1} | {Hit2,7:P1} | {Mrr,8:F4} | {Negative,8}",
+                    "{Strategy,-22} | {Chunks,6} | {Hit1,7:P1} | {Hit2,7:P1} | {Mrr,8:F4} | {Negative,8} | {Abstained,9} | {Abstention,10:P1}",
                     report.Strategy,
                     report.ChunkCount,
                     report.HitRateAt1,
                     report.HitRateAt2,
                     report.Mrr,
-                    report.NegativeQueriesWithResults);
+                    report.NegativeQueriesWithResults,
+                    report.NegativeQueriesWithoutResults,
+                    report.AbstentionRate);
             }
 
             _logger.LogInformation(

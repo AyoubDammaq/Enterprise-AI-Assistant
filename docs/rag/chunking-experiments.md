@@ -279,3 +279,208 @@ The historical results documented above describe the original experiment. A subs
 - The evaluation uses only five positive and two negative questions over three documents.
 - Successful execution does not establish production readiness or guarantee retrieval quality on a larger corpus.
 - Further evaluation should include chunk-level relevance judgments, a larger corpus, and additional negative queries.
+
+
+## 11. C4 — Retrieval Evaluation and Abstention — November 25, 2026
+
+### 11.1 Evaluation Dataset
+
+The C4 evaluation uses a centralized dataset containing seven questions:
+
+| Category | Questions | Count |
+|---|---|---:|
+| Positive | Q1–Q5 | 5 |
+| Negative | Q6–Q7 | 2 |
+| **Total** | **Q1–Q7** | **7** |
+
+The evaluation corpus contains three Markdown documents:
+
+- `support-faq.md`
+- `product-guide.md`
+- `troubleshooting.md`
+
+Each positive question is associated with manually annotated relevant chunk identifiers generated using the `ParagraphAware` chunking configuration.
+
+The negative questions represent information expected to be absent from the corpus.
+
+### 11.2 Evaluation Metrics
+
+Positive and negative questions are evaluated separately.
+
+Positive retrieval metrics:
+
+- Precision@K: proportion of retrieved chunks that are relevant.
+- Recall@K: proportion of annotated relevant chunks retrieved.
+- Hit Rate@K: proportion of questions for which at least one relevant result is retrieved within the first K results.
+- Mean Reciprocal Rank (MRR): average reciprocal rank of the first relevant result.
+
+Negative retrieval metrics:
+
+- Abstained query: no retrieval results were returned.
+- Query with results: one or more retrieval results were returned.
+- Abstention Rate: proportion of negative questions for which retrieval returned no results.
+
+A returned result is not automatically a false positive. Its content must be reviewed to determine whether it provides useful evidence.
+
+### 11.3 Experiment A — TopK Evaluation
+
+This experiment evaluates the impact of the number of retrieved chunks on positive retrieval metrics.
+
+The evaluation uses the same embedding model, corpus, similarity threshold (0.50), and five positive questions.
+
+#### Positive Retrieval Results
+
+| TopK | Precision@K | Recall@K | Hit Rate@K | MRR |
+|---:|---:|---:|---:|---:|
+| 1 | 100% | 100% | 100% | 1.0000 |
+| 3 | 33.33% | 100% | 100% | 1.0000 |
+| 5 | 20% | 100% | 100% | 1.0000 |
+
+All five positive questions retrieved their annotated relevant chunk at rank 1.
+
+Precision decreases as more chunks are retrieved, while recall remains at 100% because all annotated relevant chunks are retrieved.
+
+#### Negative Query Results
+
+Both negative questions returned retrieval results at the 0.50 similarity threshold.
+
+| Metric | Result |
+|---|---:|
+| Negative Questions | 2 |
+| Queries With Results | 2 |
+| Abstained Queries | 0 |
+| Abstention Rate | 0% |
+
+For both negative questions, the `product-guide.md::chunk-0000` chunk was retrieved despite not providing the requested information.
+
+This demonstrates that successful positive retrieval does not guarantee appropriate abstention for questions outside the knowledge base.
+
+### 11.4 Experiment B — Similarity Threshold Evaluation
+
+This experiment evaluates the impact of different minimum similarity thresholds.
+
+The experiment uses TopK = 3 and evaluates four thresholds.
+
+#### Retrieval Results
+
+| Threshold | Hit Rate@1 | Hit Rate@2 | MRR | Negative Queries With Results | Abstention Rate |
+|---:|---:|---:|---:|---:|---:|
+| 0.50 | 100% | 100% | 1.0000 | 2/2 | 0% |
+| 0.60 | 100% | 100% | 1.0000 | 2/2 | 0% |
+| 0.70 | 80% | 80% | 0.8000 | 1/2 | 50% |
+| 0.80 | 20% | 20% | 0.2000 | 0/2 | 100% |
+
+#### Observations
+
+- At thresholds 0.50 and 0.60, all positive questions retrieve relevant information, but neither negative question is rejected.
+- At 0.70, positive retrieval performance decreases to 80%, while one of the two negative questions is rejected.
+- At 0.80, both negative questions are rejected, but positive Hit Rate@1 decreases to 20%.
+- At 0.70, Q5 no longer retrieves its expected relevant chunk, while Q6 is rejected and Q7 still returns a result.
+- At 0.80, only Q2 retrieves a relevant result among the five positive questions.
+
+Increasing the similarity threshold improves abstention but can also reject relevant information.
+
+A threshold of 0.80 is therefore too restrictive for the current evaluation dataset.
+
+These results do not justify selecting a production threshold. A larger evaluation dataset is required to assess the trade-off reliably.
+
+### 11.5 Experiment C — Chunking Strategy Comparison
+
+This experiment compares FixedSize, ParagraphAware, and RecursiveCharacter using the same corpus and evaluation questions.
+
+#### Positive Retrieval Results
+
+| Strategy | Chunks | HitRate@1 | HitRate@2 | MRR |
+|---|---:|---:|---:|---:|
+| FixedSize | 6 | 100% | 100% | 1.0000 |
+| ParagraphAware | 6 | 100% | 100% | 1.0000 |
+| RecursiveCharacter | 6 | 100% | 100% | 1.0000 |
+
+All five positive questions retrieved their expected relevant chunk at rank 1 across the three strategies.
+
+#### Negative Query and Abstention Results
+
+| Strategy | Negative Questions | Queries With Results | Abstained Queries | Abstention Rate |
+|---|---:|---:|---:|---:|
+| FixedSize | 2 | 2 | 0 | 0% |
+| ParagraphAware | 2 | 2 | 0 | 0% |
+| RecursiveCharacter | 2 | 2 | 0 | 0% |
+
+Detailed retrieval counts:
+
+| Question | FixedSize | ParagraphAware | RecursiveCharacter |
+|---|---:|---:|---:|
+| Q6: Monthly subscription price | 4 | 4 | 4 |
+| Q7: Production database engine | 4 | 4 | 5 |
+
+None of the three strategies abstained on either negative question.
+
+#### Observations
+
+- All strategies generated six chunks.
+- All achieved identical positive retrieval metrics.
+- No measurable retrieval advantage was demonstrated by changing the chunking strategy.
+- All strategies returned results for both negative questions.
+- RecursiveCharacter returned one additional result for Q7.
+
+The experiment does not establish that the three strategies are equivalent on larger or more diverse corpora.
+
+### 11.6 Overall Limitations
+
+The C4 evaluation has several important limitations:
+
+- Only seven questions are included: five positive and two negative.
+- The corpus contains only three Markdown documents.
+- Relevant chunk annotations are manually defined.
+- Results depend on the selected embedding model and retrieval configuration.
+- The experiments do not establish generalization to larger or more diverse corpora.
+- Similarity scores do not prove that retrieved chunks contain sufficient evidence to answer a question.
+- Retrieval metrics do not measure the correctness or factual grounding of generated LLM answers.
+- Negative retrieval results require manual relevance review before being classified as false positives.
+
+The observed 100% positive retrieval metrics should be interpreted as preliminary results on a small benchmark, not as evidence of general or production-level performance.
+
+### 11.7 Conclusion
+
+C4 introduces a centralized evaluation dataset, positive retrieval metrics, and a separate abstention evaluation for negative questions.
+
+The three experiments provide complementary observations:
+
+1. **TopK evaluation:** increasing the number of retrieved chunks preserves recall but reduces precision.
+2. **Similarity threshold evaluation:** higher thresholds improve abstention but can significantly reduce positive retrieval performance.
+3. **Chunking strategy comparison:** all three strategies achieve identical positive retrieval metrics on the current dataset, with no demonstrated advantage in abstention.
+
+The current ParagraphAware strategy remains a reasonable baseline, but the experiments do not establish its superiority.
+
+Further work should focus on:
+
+- Expanding the evaluation dataset with more positive and negative questions.
+- Improving manually annotated chunk-level relevance judgments.
+- Evaluating threshold selection on a larger benchmark.
+- Testing reranking and context filtering.
+- Evaluating whether generated answers are supported by retrieved evidence.
+
+The results are preliminary and should not be used alone to establish production readiness.
+
+### 11.8 Test Provenance and Reproducibility
+
+The C4 evaluation was executed on the following environment:
+
+| Property | Value |
+|---|---|
+| Git branch | `week-11/advanced-rag` |
+| Base commit | `08698b45faf4a304cb0b39576a2e4e7976a50313` |
+| Working tree | Modified; C4 changes were not committed |
+| .NET SDK | 10.0.402 |
+| Target framework | `net10.0` |
+| Test command | `dotnet test .\EnterpriseAIAssistant.slnx --no-restore --logger "console;verbosity=normal"` |
+| Total tests | 248 |
+| Passed | 247 |
+| Failed | 0 |
+| Skipped | 1 |
+
+**Important:** These results correspond to the working tree based on the specified commit, including uncommitted C4 evaluation changes. They must not be interpreted as test results for the base commit alone.
+
+The skipped test concerns persistence across process restarts in the in-memory storage implementation. This behavior is expected because the current implementation does not provide durable storage.
+
+To reproduce the evaluation, apply the corresponding C4 working-tree changes, configure the required RAG corpus path, ensure Ollama is running with the required models, and execute the test command above.
